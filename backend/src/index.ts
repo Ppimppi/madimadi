@@ -4,7 +4,6 @@ import express from "express";
 import helmet from "helmet";
 
 import { pool } from "./db.js";
-import { appUrl } from "./env.js";
 import { analysesRouter } from "./routes/analyses.js";
 import { authRouter } from "./routes/auth.js";
 
@@ -32,6 +31,10 @@ app.use((error: unknown, _req: express.Request, res: express.Response, _next: ex
   res.status(500).json({ error: "서버에서 문제가 발생했습니다." });
 });
 
-app.listen(port, () => {
-  console.log(`Madimadi API listening on port ${port} for ${appUrl().origin}`);
-});
+export default app;
+
+if (!process.env.VERCEL) {
+  app.listen(port, () => {
+    console.log(`Madimadi API listening on port ${port}`);
+  });
+}
