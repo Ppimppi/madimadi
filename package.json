@@ -1,0 +1,17 @@
+{
+  "name": "madimadi",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["frontend", "backend"],
+  "engines": { "node": ">=22.13.0" },
+  "scripts": {
+    "dev": "concurrently -n frontend,backend -c blue,magenta \"npm run dev --workspace frontend\" \"npm run dev --workspace backend\"",
+    "build": "npm run build --workspace backend && npm run build --workspace frontend",
+    "typecheck": "npm run typecheck --workspace backend",
+    "lint": "npm run lint --workspace frontend",
+    "db:migrate": "npm run db:migrate --workspace backend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
