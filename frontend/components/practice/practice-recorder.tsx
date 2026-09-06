@@ -11,7 +11,7 @@ import {
   Sparkles,
   Volume2,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -43,12 +43,16 @@ type RecognitionEventLike = {
   results: ArrayLike<RecognitionResultLike>;
 };
 
+type RecognitionErrorEventLike = {
+  error: string;
+};
+
 type RecognitionLike = {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
   onresult: ((event: RecognitionEventLike) => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event: RecognitionErrorEventLike) => void) | null;
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
@@ -78,38 +82,91 @@ export function PracticeRecorder() {
   const recognitionRef = useRef<RecognitionLike | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recognitionRestartRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startedAtRef = useRef(0);
   const finalTranscriptRef = useRef("");
   const shouldRecognizeRef = useRef(false);
+  const startingRef = useRef(false);
+  const statusRef = useRef<RecorderStatus>("idle");
 
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      recognitionRef.current?.abort();
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      if (audioUrl) URL.revokeObjectURL(audioUrl);
-    };
-  }, [audioUrl]);
+  const changeStatus = useCallback((nextStatus: RecorderStatus) => {
+    statusRef.current = nextStatus;
+    setStatus(nextStatus);
+  }, []);
 
-  function stopRecording() {
-    const recorder = recorderRef.current;
-    if (!recorder || recorder.state !== "recording") return;
-
-    const duration = Math.max(1, Math.round((Date.now() - startedAtRef.current) / 1000));
-    setSeconds(duration);
-    setStatus("recorded");
-    shouldRecognizeRef.current = false;
-
+  const clearTimer = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    recognitionRef.current?.stop();
-    recorder.stop();
+  }, []);
+
+  const clearRecognitionRestart = useCallback(() => {
+    if (recognitionRestartRef.current) {
+      clearTimeout(recognitionRestartRef.current);
+      recognitionRestartRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearTimer();
+      clearRecognitionRestart();
+      shouldRecognizeRef.current = false;
+      recognitionRef.current?.abort();
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, [clearRecognitionRestart, clearTimer]);
+
+  useEffect(() => {
+    return () => {
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+    };
+  }, [audioUrl]);
+
+  const stopRecording = useCallback(() => {
+    if (statusRef.current !== "recording") return;
+
+    const recorder = recorderRef.current;
+    const duration = Math.max(1, Math.round((Date.now() - startedAtRef.current) / 1000));
+
+    clearTimer();
+    clearRecognitionRestart();
+    shouldRecognizeRef.current = false;
+    setSeconds(duration);
+    changeStatus("recorded");
+
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      recognitionRef.current?.abort();
+    }
+
+    if (recorder && recorder.state !== "inactive") recorder.stop();
     streamRef.current?.getTracks().forEach((track) => track.stop());
-  }
+    streamRef.current = null;
+  }, [changeStatus, clearRecognitionRestart, clearTimer]);
+
+  useEffect(() => {
+    if (status !== "recording") {
+      clearTimer();
+      return;
+    }
+
+    const updateElapsedTime = () => {
+      const elapsed = Math.floor((Date.now() - startedAtRef.current) / 1000);
+      setSeconds(Math.min(elapsed, 300));
+      if (elapsed >= 300) stopRecording();
+    };
+
+    updateElapsedTime();
+    timerRef.current = setInterval(updateElapsedTime, 250);
+    return clearTimer;
+  }, [clearTimer, status, stopRecording]);
 
   async function startRecording() {
+    if (startingRef.current || statusRef.current === "recording") return;
+    startingRef.current = true;
     setError("");
     setNotice("");
     setResult(null);
@@ -123,6 +180,7 @@ export function PracticeRecorder() {
 
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       setError("이 브라우저에서는 마이크 녹음을 지원하지 않습니다. 최신 Chrome 또는 Edge를 사용해주세요.");
+      startingRef.current = false;
       return;
     }
 
@@ -137,7 +195,11 @@ export function PracticeRecorder() {
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
         setAudioUrl(URL.createObjectURL(blob));
+        if (statusRef.current === "recording") stopRecording();
       };
+      startedAtRef.current = Date.now();
+      setSeconds(0);
+      changeStatus("recording");
       recorder.start(250);
 
       const recognitionWindow = window as typeof window & {
@@ -162,16 +224,27 @@ export function PracticeRecorder() {
           finalTranscriptRef.current = finalText;
           setTranscript(`${finalText} ${interimText}`.trim());
         };
-        recognition.onerror = () => {
-          setNotice("자동 받아쓰기가 잠시 멈췄습니다. 녹음 후 아래 내용을 직접 수정할 수 있어요.");
+        recognition.onerror = (event) => {
+          if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+            shouldRecognizeRef.current = false;
+            setNotice("브라우저에서 실시간 받아쓰기가 차단되었습니다. 주소창의 마이크 권한을 허용해주세요.");
+            return;
+          }
+          if (event.error !== "aborted" && event.error !== "no-speech") {
+            setNotice(`실시간 받아쓰기가 중단되었습니다(${event.error}). 녹음 후 직접 수정할 수 있어요.`);
+          }
         };
         recognition.onend = () => {
           if (shouldRecognizeRef.current) {
-            try {
-              recognition.start();
-            } catch {
-              // The browser may already be restarting the recognition session.
-            }
+            clearRecognitionRestart();
+            recognitionRestartRef.current = setTimeout(() => {
+              if (!shouldRecognizeRef.current) return;
+              try {
+                recognition.start();
+              } catch {
+                setNotice("실시간 받아쓰기를 다시 시작하지 못했습니다. 녹음 후 직접 수정할 수 있어요.");
+              }
+            }, 250);
           }
         };
         recognitionRef.current = recognition;
@@ -180,18 +253,20 @@ export function PracticeRecorder() {
       } else {
         setNotice("이 브라우저는 자동 받아쓰기를 지원하지 않습니다. 녹음 후 내용을 직접 입력해주세요.");
       }
-
-      startedAtRef.current = Date.now();
-      setSeconds(0);
-      setStatus("recording");
-      timerRef.current = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - startedAtRef.current) / 1000);
-        setSeconds(elapsed);
-        if (elapsed >= 300) stopRecording();
-      }, 250);
     } catch {
       setError("마이크 권한을 허용해야 연습을 시작할 수 있습니다.");
+      clearTimer();
+      clearRecognitionRestart();
+      shouldRecognizeRef.current = false;
+      recognitionRef.current?.abort();
+      if (recorderRef.current && recorderRef.current.state !== "inactive") {
+        recorderRef.current.stop();
+      }
       streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      changeStatus("idle");
+    } finally {
+      startingRef.current = false;
     }
   }
 
@@ -203,7 +278,13 @@ export function PracticeRecorder() {
     setResult(null);
     setError("");
     setNotice("");
-    setStatus("idle");
+    clearTimer();
+    clearRecognitionRestart();
+    shouldRecognizeRef.current = false;
+    recognitionRef.current?.abort();
+    recognitionRef.current = null;
+    recorderRef.current = null;
+    changeStatus("idle");
     finalTranscriptRef.current = "";
   }
 
@@ -217,7 +298,7 @@ export function PracticeRecorder() {
       return;
     }
 
-    setStatus("analyzing");
+    changeStatus("analyzing");
     setError("");
     try {
       const response = await fetch("/api/analyses", {
@@ -228,10 +309,10 @@ export function PracticeRecorder() {
       const data = (await response.json()) as { analysis?: SavedAnalysis; error?: string };
       if (!response.ok || !data.analysis) throw new Error(data.error || "분석에 실패했습니다.");
       setResult(data.analysis);
-      setStatus("complete");
+      changeStatus("complete");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "분석 중 문제가 발생했습니다.");
-      setStatus("recorded");
+      changeStatus("recorded");
     }
   }
 
