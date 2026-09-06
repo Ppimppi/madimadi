@@ -187,9 +187,31 @@ export function clearSessionCookie(res: Response): void {
 
 export function isSameOriginRequest(req: Request): boolean {
   const origin = req.get("origin");
-  return !origin || origin === appUrl().origin;
+  if (!origin) return true;
+
+  try {
+    const allowedOrigins = new Set([appUrl().origin]);
+    const forwardedHost = firstForwardedValue(req.get("x-forwarded-host"));
+    const host = forwardedHost ?? req.get("host");
+
+    if (host) {
+      const protocol =
+        firstForwardedValue(req.get("x-forwarded-proto")) ?? req.protocol;
+
+      allowedOrigins.add(new URL(`${protocol}://${host}`).origin);
+    }
+
+    return allowedOrigins.has(new URL(origin).origin);
+  } catch {
+    return false;
+  }
 }
 
+function firstForwardedValue(
+  value: string | undefined
+): string | undefined {
+  return value?.split(",", 1)[0]?.trim() || undefined;
+}
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
