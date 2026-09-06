@@ -75,6 +75,7 @@ git push -u origin main
 
 `.env` 파일은 Git에 포함되지 않습니다. 비밀키는 GitHub에 올리지 말고 배포 서비스의 환경변수에 입력하세요.
 
+
 ## 배포 시 기준 경로
 
 | 서비스 | Root Directory | Build Command | Start/Output |
