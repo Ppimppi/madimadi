@@ -72,6 +72,7 @@ export function PracticeRecorder() {
   const [practiceType, setPracticeType] = useState<PracticeType>("자유 말하기");
   const [seconds, setSeconds] = useState(0);
   const [transcript, setTranscript] = useState("");
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -171,6 +172,7 @@ export function PracticeRecorder() {
     setNotice("");
     setResult(null);
     setTranscript("");
+    setAudioBlob(null);
     finalTranscriptRef.current = "";
     chunksRef.current = [];
     if (audioUrl) {
@@ -187,13 +189,19 @@ export function PracticeRecorder() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const recorder = new MediaRecorder(stream);
+      let recorder: MediaRecorder;
+      try {
+        recorder = new MediaRecorder(stream, { audioBitsPerSecond: 48_000 });
+      } catch {
+        recorder = new MediaRecorder(stream);
+      }
       recorderRef.current = recorder;
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunksRef.current.push(event.data);
       };
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        setAudioBlob(blob);
         setAudioUrl(URL.createObjectURL(blob));
         if (statusRef.current === "recording") stopRecording();
       };
@@ -273,6 +281,7 @@ export function PracticeRecorder() {
   function resetPractice() {
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     setAudioUrl(null);
+    setAudioBlob(null);
     setTranscript("");
     setSeconds(0);
     setResult(null);
@@ -293,21 +302,27 @@ export function PracticeRecorder() {
       setError("3초 이상 말한 뒤 분석해주세요.");
       return;
     }
-    if (transcript.trim().length < 2) {
-      setError("자동 받아쓰기 내용을 확인하거나 직접 입력해주세요.");
+    if (!audioBlob || audioBlob.size === 0) {
+      setError("녹음 파일을 준비하고 있습니다. 잠시 후 다시 눌러주세요.");
       return;
     }
 
     changeStatus("analyzing");
     setError("");
     try {
-      const response = await fetch("/api/analyses", {
+      const query = new URLSearchParams({
+        durationSeconds: String(seconds),
+        practiceType,
+      });
+      const response = await fetch(`/api/analyses?${query.toString()}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript, durationSeconds: seconds, practiceType }),
+        headers: { "Content-Type": audioBlob.type || "audio/webm" },
+        body: audioBlob,
       });
       const data = (await response.json()) as { analysis?: SavedAnalysis; error?: string };
       if (!response.ok || !data.analysis) throw new Error(data.error || "분석에 실패했습니다.");
+      setTranscript(data.analysis.transcript);
+      finalTranscriptRef.current = data.analysis.transcript;
       setResult(data.analysis);
       changeStatus("complete");
     } catch (caught) {
@@ -352,7 +367,7 @@ export function PracticeRecorder() {
           {status === "idle" && <Button className="record-primary" onClick={startRecording}><Mic2 />녹음 시작</Button>}
           {status === "recording" && <Button className="record-stop" onClick={stopRecording}><CircleStop />녹음 종료</Button>}
           {(status === "recorded" || status === "complete") && <Button variant="outline" onClick={resetPractice}><RotateCcw />다시 녹음</Button>}
-          {status === "recorded" && <Button className="record-primary" onClick={saveAndAnalyze}><Sparkles />분석하고 저장</Button>}
+          {status === "recorded" && <Button className="record-primary" onClick={saveAndAnalyze} disabled={!audioBlob}><Sparkles />분석하고 저장</Button>}
           {status === "analyzing" && <Button className="record-primary" disabled><Save />분석 중…</Button>}
         </div>
 
@@ -373,7 +388,7 @@ export function PracticeRecorder() {
             finalTranscriptRef.current = event.target.value;
           }}
           disabled={status === "analyzing"}
-          placeholder="녹음을 시작하면 말한 내용이 여기에 표시됩니다. 자동 받아쓰기가 정확하지 않으면 직접 수정할 수 있어요."
+          placeholder="녹음 중에는 실시간 자막이 표시되고, 분석 후에는 AI가 음성 원본에서 만든 정확한 받아쓰기로 교체됩니다."
           aria-label="녹음 받아쓰기 내용"
         />
       </section>

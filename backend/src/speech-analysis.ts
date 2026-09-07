@@ -1,7 +1,20 @@
 export const PRACTICE_TYPES = ["자유 말하기", "면접", "발표", "회의"] as const;
 export type PracticeType = (typeof PRACTICE_TYPES)[number];
 
-const FILLER_WORDS = ["음", "어", "저기", "그러니까", "약간", "뭔가"] as const;
+const FILLER_WORDS = [
+  "음",
+  "으음",
+  "어",
+  "엄",
+  "저기",
+  "그러니까",
+  "그니까",
+  "뭐랄까",
+  "있잖아",
+  "있잖아요",
+  "약간",
+  "뭔가",
+] as const;
 
 export function isPracticeType(value: unknown): value is PracticeType {
   return typeof value === "string" && PRACTICE_TYPES.includes(value as PracticeType);
@@ -13,22 +26,36 @@ export function analyzeSpeech(transcript: string, durationSeconds: number) {
     .filter(Boolean);
   const fillerDetails: Record<string, number> = {};
   for (const filler of FILLER_WORDS) {
-    const count = tokens.filter((token) => token === filler).length;
+    const count = tokens.filter((token) => isSameFiller(token, filler)).length;
     if (count > 0) fillerDetails[filler] = count;
   }
 
+  const repeatedStarts = tokens.reduce((count, token, index) => {
+    if (index === 0 || token.length < 2) return count;
+    return tokens[index - 1] === token ? count + 1 : count;
+  }, 0);
+  if (repeatedStarts > 0) fillerDetails["단어 반복"] = repeatedStarts;
+
   const wordCount = tokens.length;
   const fillerCount = Object.values(fillerDetails).reduce((sum, count) => sum + count, 0);
-  const speakingRate = Math.round(wordCount / Math.max(durationSeconds / 60, 1 / 60));
+  const durationMinutes = Math.max(durationSeconds / 60, 1 / 60);
+  const speakingRate = Math.round(wordCount / durationMinutes);
   const fillerRate = wordCount > 0 ? (fillerCount / wordCount) * 100 : 0;
+  const fillersPerMinute = fillerCount / durationMinutes;
   let pacePenalty = 0;
   if (speakingRate < 90) pacePenalty = Math.min(30, (90 - speakingRate) * 0.35);
-  if (speakingRate > 170) pacePenalty = Math.min(30, (speakingRate - 170) * 0.25);
-  const score = Math.max(0, Math.min(100, Math.round(100 - pacePenalty - Math.min(35, fillerRate * 4) - (wordCount < 10 ? 12 : 0))));
+  if (speakingRate > 160) pacePenalty = Math.min(30, (speakingRate - 160) * 0.3);
+  const fillerPenalty = Math.min(48, fillerRate * 1.8 + fillersPerMinute * 2.5);
+  const repetitionPenalty = Math.min(12, repeatedStarts * 2);
+  const reliabilityCeiling = durationSeconds < 15 ? 68 : durationSeconds < 30 ? 82 : 100;
+  const score = Math.max(
+    0,
+    Math.min(reliabilityCeiling, Math.round(96 - pacePenalty - fillerPenalty - repetitionPenalty)),
+  );
 
   const goodPoints: string[] = [];
   const improvements: string[] = [];
-  if (speakingRate >= 90 && speakingRate <= 170) goodPoints.push("듣는 사람이 따라가기 편한 속도를 유지했어요.");
+  if (speakingRate >= 90 && speakingRate <= 160) goodPoints.push("듣는 사람이 따라가기 편한 속도를 유지했어요.");
   else if (speakingRate < 90) improvements.push("문장 사이의 멈춤을 줄여 조금 더 자연스럽게 이어 말해보세요.");
   else improvements.push("핵심 문장 뒤에 짧게 숨을 쉬며 속도를 낮춰보세요.");
 
@@ -47,4 +74,12 @@ export function analyzeSpeech(transcript: string, durationSeconds: number) {
       ? "전체 흐름은 좋아요. 한 가지 습관만 다듬으면 더 선명해집니다."
       : "속도와 추임새를 하나씩 조절하면 전달력이 빠르게 좋아질 수 있어요.";
   return { wordCount, fillerCount, fillerDetails, speakingRate, score, summary, goodPoints, improvements };
+}
+
+function isSameFiller(token: string, filler: (typeof FILLER_WORDS)[number]): boolean {
+  if (token === filler) return true;
+  if (filler === "어") return /^어{2,}$/.test(token);
+  if (filler === "음") return /^음{2,}$/.test(token);
+  if (filler === "으음") return /^으+음+$/.test(token);
+  return false;
 }

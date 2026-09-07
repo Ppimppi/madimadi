@@ -52,6 +52,10 @@ madimadi/
 | backend | `DATABASE_URL` | PostgreSQL 연결 주소 |
 | backend | `APP_URL` | 로컬 `http://localhost:3000`, 배포 후 Vercel 주소 |
 | backend | `NODE_ENV` | 배포 환경에서는 `production` |
+| backend | `GEMINI_API_KEY` | Google AI Studio API 비밀키. 프론트나 GitHub에 넣지 않음 |
+| backend | `GEMINI_TRANSCRIPTION_MODEL` | 선택 사항. 기본값 `gemini-3.5-transcribe` |
+
+말하기 분석은 브라우저의 실시간 자막이 아니라 녹음 원본을 Gemini 음성 인식 API로 다시 전사한 결과를 기준으로 계산합니다. 따라서 추임새·머뭇거림·단어 반복이 실시간 자막에서 빠져도 최종 분석에는 반영될 수 있습니다.
 
 Google/카카오 로그인은 `backend/.env.example`의 앱 키도 채워야 합니다. 공급자 콘솔의 콜백 주소는 아래 형식으로 등록합니다.
 
@@ -74,7 +78,6 @@ git push -u origin main
 ```
 
 `.env` 파일은 Git에 포함되지 않습니다. 비밀키는 GitHub에 올리지 말고 배포 서비스의 환경변수에 입력하세요.
-
 
 ## 배포 시 기준 경로
 

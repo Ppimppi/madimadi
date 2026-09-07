@@ -27,8 +27,11 @@ app.use("/api/auth", authRouter);
 app.use("/api/analyses", analysesRouter);
 app.use((_req, res) => res.status(404).json({ error: "요청한 API를 찾을 수 없습니다." }));
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (isRequestTooLargeError(error)) {
+    return res.status(413).json({ error: "녹음 파일이 너무 큽니다. 5분 이하로 다시 녹음해주세요." });
+  }
   console.error("Unhandled API error", error);
-  res.status(500).json({ error: "서버에서 문제가 발생했습니다." });
+  return res.status(500).json({ error: "서버에서 문제가 발생했습니다." });
 });
 
 export default app;
@@ -37,4 +40,11 @@ if (!process.env.VERCEL) {
   app.listen(port, () => {
     console.log(`Madimadi API listening on port ${port}`);
   });
+}
+
+function isRequestTooLargeError(error: unknown): boolean {
+  return typeof error === "object"
+    && error !== null
+    && "type" in error
+    && error.type === "entity.too.large";
 }
