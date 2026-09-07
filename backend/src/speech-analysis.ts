@@ -1,4 +1,4 @@
-export const PRACTICE_TYPES = ["자유 말하기", "면접", "발표", "회의"] as const;
+export const PRACTICE_TYPES = ["자유 말하기", "면접", "발표", "회의", "대화"] as const;
 export type PracticeType = (typeof PRACTICE_TYPES)[number];
 
 const FILLER_WORDS = [

@@ -67,9 +67,14 @@ function formatTime(seconds: number) {
   return `${minutes}:${rest}`;
 }
 
-export function PracticeRecorder() {
+type PracticeRecorderProps = {
+  initialPracticeType?: PracticeType;
+  lockedType?: boolean;
+};
+
+export function PracticeRecorder({ initialPracticeType = "자유 말하기", lockedType = false }: PracticeRecorderProps = {}) {
   const [status, setStatus] = useState<RecorderStatus>("idle");
-  const [practiceType, setPracticeType] = useState<PracticeType>("자유 말하기");
+  const [practiceType, setPracticeType] = useState<PracticeType>(initialPracticeType);
   const [seconds, setSeconds] = useState(0);
   const [transcript, setTranscript] = useState("");
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -337,7 +342,7 @@ export function PracticeRecorder() {
         <div className="practice-options">
           <div>
             <label htmlFor="practice-type">연습 상황</label>
-            <Select value={practiceType} onValueChange={(value) => setPracticeType(value as PracticeType)} disabled={status === "recording" || status === "analyzing"}>
+            <Select value={practiceType} onValueChange={(value) => setPracticeType(value as PracticeType)} disabled={lockedType || status === "recording" || status === "analyzing"}>
               <SelectTrigger id="practice-type" className="practice-select">
                 <SelectValue />
               </SelectTrigger>

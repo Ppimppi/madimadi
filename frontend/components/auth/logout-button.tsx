@@ -18,7 +18,7 @@ export function LogoutButton() {
   }
 
   return (
-    <Button variant="ghost" className="dashboard-logout" onClick={logout} disabled={submitting}>
+    <Button variant="ghost" className="mm-logout" onClick={logout} disabled={submitting}>
       <LogOut /> {submitting ? "로그아웃 중" : "로그아웃"}
     </Button>
   );

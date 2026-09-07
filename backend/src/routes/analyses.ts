@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { raw, Router } from "express";
 import { rateLimit } from "express-rate-limit";
-import { and, count, desc, eq, gte, sum } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 import { getCurrentUser, isSameOriginRequest } from "../auth.js";
 import { db } from "../db.js";
+import { buildBadges, buildDashboardSummary, buildGrowthReport } from "../insights.js";
 import {
   GeminiConfigurationError,
   GeminiTranscriptionError,
@@ -94,29 +95,38 @@ analysesRouter.post("/", analyzeRateLimit, audioBodyParser, async (req, res) => 
 analysesRouter.get("/summary", async (req, res) => {
   const user = await getCurrentUser(req);
   if (!user) return res.status(401).json({ error: "로그인이 필요합니다." });
-  const weekStart = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const [totals, weekly, recent] = await Promise.all([
-    db.select({ totalCount: count(), totalDuration: sum(analyses.durationSeconds) }).from(analyses).where(eq(analyses.userId, user.id)),
-    db.select({ weeklyCount: count() }).from(analyses).where(and(eq(analyses.userId, user.id), gte(analyses.createdAt, weekStart))),
-    db.select({
-      id: analyses.id,
-      practiceType: analyses.practiceType,
-      durationSeconds: analyses.durationSeconds,
-      speakingRate: analyses.speakingRate,
-      fillerCount: analyses.fillerCount,
-      score: analyses.score,
-      createdAt: analyses.createdAt,
-    }).from(analyses).where(eq(analyses.userId, user.id)).orderBy(desc(analyses.createdAt)).limit(5),
-  ]);
-  return res.json({
-    summary: {
-      totalCount: totals[0]?.totalCount ?? 0,
-      totalDuration: Number(totals[0]?.totalDuration ?? 0),
-      weeklyCount: weekly[0]?.weeklyCount ?? 0,
-      recent,
-    },
-  });
+  const records = await loadAnalysisHistory(user.id);
+  return res.json({ summary: buildDashboardSummary(records) });
 });
+
+analysesRouter.get("/report", async (req, res) => {
+  const user = await getCurrentUser(req);
+  if (!user) return res.status(401).json({ error: "로그인이 필요합니다." });
+  const period = singleQueryValue(req.query.period) === "month" ? "month" : "week";
+  const records = await loadAnalysisHistory(user.id);
+  return res.json({ report: buildGrowthReport(records, period) });
+});
+
+analysesRouter.get("/badges", async (req, res) => {
+  const user = await getCurrentUser(req);
+  if (!user) return res.status(401).json({ error: "로그인이 필요합니다." });
+  const records = await loadAnalysisHistory(user.id);
+  return res.json({ badges: buildBadges(records) });
+});
+
+async function loadAnalysisHistory(userId: string) {
+  return db.select({
+    id: analyses.id,
+    practiceType: analyses.practiceType,
+    durationSeconds: analyses.durationSeconds,
+    wordCount: analyses.wordCount,
+    fillerCount: analyses.fillerCount,
+    fillerDetails: analyses.fillerDetails,
+    speakingRate: analyses.speakingRate,
+    score: analyses.score,
+    createdAt: analyses.createdAt,
+  }).from(analyses).where(eq(analyses.userId, userId)).orderBy(desc(analyses.createdAt)).limit(1_000);
+}
 
 function singleQueryValue(value: unknown): string {
   return typeof value === "string" ? value : "";

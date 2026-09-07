@@ -8,6 +8,7 @@ import {
   createOAuthSession,
   createUserWithSession,
   getCurrentUser,
+  hashPassword,
   isSameOriginRequest,
   isValidEmail,
   isValidName,
@@ -17,6 +18,7 @@ import {
   sanitizeGoals,
   SESSION_COOKIE_NAME,
   setSessionCookie,
+  verifyPassword,
 } from "../auth.js";
 import { db } from "../db.js";
 import { appUrl } from "../env.js";
@@ -86,6 +88,51 @@ authRouter.post("/logout", async (req, res) => {
 authRouter.get("/me", async (req, res) => {
   const user = await getCurrentUser(req);
   return user ? res.json({ user }) : res.status(401).json({ error: "로그인이 필요합니다." });
+});
+
+authRouter.patch("/profile", async (req, res) => {
+  if (!isSameOriginRequest(req)) return res.status(403).json({ error: "허용되지 않은 요청입니다." });
+  const user = await getCurrentUser(req);
+  if (!user) return res.status(401).json({ error: "로그인이 필요합니다." });
+  const body = isRecord(req.body) ? req.body : {};
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  const goals = sanitizeGoals(body.goals);
+  if (!isValidName(name)) return res.status(400).json({ error: "이름은 2자 이상 40자 이하로 입력해주세요." });
+  await db.update(users).set({ name, goals: JSON.stringify(goals) }).where(eq(users.id, user.id));
+  return res.json({ user: { ...user, name, goals } });
+});
+
+authRouter.post("/password", async (req, res) => {
+  if (!isSameOriginRequest(req)) return res.status(403).json({ error: "허용되지 않은 요청입니다." });
+  const user = await getCurrentUser(req);
+  if (!user) return res.status(401).json({ error: "로그인이 필요합니다." });
+  const body = isRecord(req.body) ? req.body : {};
+  const currentPassword = typeof body.currentPassword === "string" ? body.currentPassword : "";
+  const newPassword = typeof body.newPassword === "string" ? body.newPassword : "";
+  const passwordConfirm = typeof body.passwordConfirm === "string" ? body.passwordConfirm : "";
+  if (!isValidPassword(newPassword)) return res.status(400).json({ error: "새 비밀번호는 8자 이상 128자 이하로 입력해주세요." });
+  if (newPassword !== passwordConfirm) return res.status(400).json({ error: "새 비밀번호가 서로 일치하지 않습니다." });
+  const [storedUser] = await db.select({ passwordHash: users.passwordHash, passwordSalt: users.passwordSalt })
+    .from(users).where(eq(users.id, user.id)).limit(1);
+  if (!storedUser || !verifyPassword(currentPassword, storedUser.passwordSalt, storedUser.passwordHash)) {
+    return res.status(401).json({ error: "현재 비밀번호가 올바르지 않습니다." });
+  }
+  const password = hashPassword(newPassword);
+  await db.update(users).set({ passwordHash: password.hash, passwordSalt: password.salt }).where(eq(users.id, user.id));
+  return res.json({ ok: true });
+});
+
+authRouter.delete("/account", async (req, res) => {
+  if (!isSameOriginRequest(req)) return res.status(403).json({ error: "허용되지 않은 요청입니다." });
+  const user = await getCurrentUser(req);
+  if (!user) return res.status(401).json({ error: "로그인이 필요합니다." });
+  const body = isRecord(req.body) ? req.body : {};
+  if (body.confirmation !== "마디마디 탈퇴") {
+    return res.status(400).json({ error: "확인 문구를 정확히 입력해주세요." });
+  }
+  await db.delete(users).where(eq(users.id, user.id));
+  clearSessionCookie(res);
+  return res.json({ ok: true });
 });
 
 authRouter.get("/oauth/google", (req, res) => {

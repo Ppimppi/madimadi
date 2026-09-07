@@ -54,8 +54,11 @@ madimadi/
 | backend | `NODE_ENV` | 배포 환경에서는 `production` |
 | backend | `GEMINI_API_KEY` | Google AI Studio API 비밀키. 프론트나 GitHub에 넣지 않음 |
 | backend | `GEMINI_TRANSCRIPTION_MODEL` | 선택 사항. 기본값 `gemini-3.5-transcribe` |
+| backend | `GEMINI_COACH_MODEL` | 선택 사항. 기본값 `gemini-3.5-flash-lite` |
 
 말하기 분석은 브라우저의 실시간 자막이 아니라 녹음 원본을 Gemini 음성 인식 API로 다시 전사한 결과를 기준으로 계산합니다. 따라서 추임새·머뭇거림·단어 반복이 실시간 자막에서 빠져도 최종 분석에는 반영될 수 있습니다.
+
+로그인 후에는 대시보드, 음성 분석, 상황별 연습, 성장 리포트, AI 코치, 배지, 설정을 사용할 수 있습니다. 성장 리포트와 배지는 저장된 분석 기록에서 자동으로 계산되며, AI 코치는 최근 5개의 분석 기록을 참고해 답변합니다.
 
 Google/카카오 로그인은 `backend/.env.example`의 앱 키도 채워야 합니다. 공급자 콘솔의 콜백 주소는 아래 형식으로 등록합니다.
 
