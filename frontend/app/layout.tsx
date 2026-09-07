@@ -23,3 +23,5 @@ export default function RootLayout({
     </html>
   );
 }
+
+// Vercel 최신 버 배포
