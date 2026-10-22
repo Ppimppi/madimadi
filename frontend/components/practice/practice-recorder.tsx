@@ -93,7 +93,12 @@ type PracticeRecorderProps = {
   variant?: "default" | "scenario";
 };
 
-const waveformBars = [18, 28, 42, 31, 55, 36, 64, 47, 30, 52, 39, 70, 48, 34, 58, 43, 27, 46, 62, 37, 51, 29, 41, 22];
+const waveformBars = [
+  10, 15, 23, 32, 43, 29, 20, 36, 49, 34, 24, 41,
+  54, 39, 27, 19, 14, 22, 33, 46, 31, 21, 38, 51,
+  43, 29, 19, 15, 25, 40, 52, 36, 24, 18, 31, 45,
+  37, 26, 19, 15, 23, 34, 28, 20, 15, 11,
+];
 
 export function PracticeRecorder({ initialPracticeType = "자유 말하기", lockedType = false, intro, variant = "default" }: PracticeRecorderProps = {}) {
   const [status, setStatus] = useState<RecorderStatus>("idle");

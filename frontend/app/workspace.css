@@ -280,6 +280,7 @@
   opacity: .72;
 }
 
+.mm-sound-bars.is-left,
 .mm-sound-bars.is-right { transform: scaleX(-1); }
 
 .mm-stat-grid {
@@ -417,6 +418,7 @@
 .mm-comparison-grid em.is-positive { color: #278267; }
 .mm-comparison-grid em svg { width: 13px; }
 .mm-report-badges { margin-top: 17px; padding: 24px; }
+.mm-report-empty { min-height: 150px; padding: 24px; text-align: center; }
 .mm-earned-row { margin-top: 18px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .mm-earned-row article { padding: 15px; display: flex; align-items: center; gap: 11px; border-radius: 13px; background: #faf9fd; }
 .mm-earned-row article > div { display: flex; flex-direction: column; gap: 3px; }

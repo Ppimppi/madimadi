@@ -1605,8 +1605,8 @@ div.camera-preview video {
 
 .recorder-visual {
   width: min(100%, 470px);
-  min-height: 154px;
-  margin: 24px auto 10px;
+  min-height: 150px;
+  margin: 26px auto 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1614,21 +1614,23 @@ div.camera-preview video {
 }
 
 .recorder-waveform {
-  width: min(100%, 390px);
-  height: 70px;
-  padding: 0 8px;
+  width: min(100%, 370px);
+  height: 60px;
+  padding: 0 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 2.5px;
 }
 
 .recorder-waveform i {
-  width: 4px;
-  min-height: 8px;
+  width: 3px;
+  min-height: 6px;
+  flex: 0 1 3px;
   border-radius: 99px;
-  background: linear-gradient(180deg, #8f7afb, #6048e4);
-  opacity: 0.82;
+  background: linear-gradient(180deg, #a18fff 0%, #7158ef 52%, #8874f7 100%);
+  box-shadow: 0 1px 4px rgba(104, 80, 224, 0.12);
+  opacity: 0.94;
 }
 
 .recorder-orb {
@@ -1650,10 +1652,10 @@ div.camera-preview video {
 }
 
 .recorder-visual .recorder-orb {
-  width: 72px;
-  height: 72px;
-  margin: 6px auto 0;
-  box-shadow: 0 0 0 9px rgba(112, 91, 236, 0.055);
+  width: 76px;
+  height: 76px;
+  margin: 18px auto 0;
+  box-shadow: 0 0 0 10px rgba(112, 91, 236, 0.05);
 }
 
 .recorder-visual .recorder-orb svg {

@@ -73,16 +73,20 @@ export default function ReportPage() {
         <span><Sparkles /> {periodLabel} 요약</span>
         <h2>{headline}</h2>
         <div className="mm-comparison-grid">
-          <Comparison label="평균 점수" previous={report.previousAverages.score} current={report.averages.score} unit="점" />
-          <Comparison label="평균 추임새" previous={report.previousAverages.fillerCount} current={report.averages.fillerCount} unit="회" reverse />
-          <Comparison label="말하기 속도" previous={report.previousAverages.speakingRate} current={report.averages.speakingRate} unit="어절/분" />
+          <Comparison label="평균 점수" previous={report.previousAverages.score} current={report.averages.score} unit="점" hasPrevious={report.previousCount > 0} hasCurrent={report.count > 0} />
+          <Comparison label="평균 추임새" previous={report.previousAverages.fillerCount} current={report.averages.fillerCount} unit="회" reverse hasPrevious={report.previousCount > 0} hasCurrent={report.count > 0} />
+          <Comparison label="말하기 속도" previous={report.previousAverages.speakingRate} current={report.averages.speakingRate} unit="어절/분" hasPrevious={report.previousCount > 0} hasCurrent={report.count > 0} />
         </div>
       </section>
 
-      <section className="mm-chart-grid mm-report-charts">
-        <ReportChart title="말버릇 횟수 변화" data={report.daily} dataKey="fillerCount" color="#f08a72" unit="회" />
-        <ReportChart title="말하기 점수 추이" data={report.daily.map((item) => ({ ...item, score: item.score ?? 0 }))} dataKey="score" color="#6552ed" unit="점" domain={[0, 100]} />
-      </section>
+      {report.count > 0 ? (
+        <section className="mm-chart-grid mm-report-charts">
+          <ReportChart title="말버릇 횟수 변화" data={report.daily} dataKey="fillerCount" color="#f08a72" unit="회" />
+          <ReportChart title="말하기 점수 추이" data={report.daily} dataKey="score" color="#6552ed" unit="점" domain={[0, 100]} />
+        </section>
+      ) : (
+        <section className="mm-card mm-empty-copy mm-report-empty"><Sparkles /><span>{periodLabel} 분석 기록이 아직 없습니다. 연습을 완료하면 변화 그래프가 표시됩니다.</span></section>
+      )}
 
       <section className="mm-card mm-report-badges">
         <div className="mm-card-heading"><div><span>이번 기간의 성취</span><h2>획득한 배지</h2></div><a href="/badges">전체 배지 보기</a></div>
@@ -96,10 +100,16 @@ export default function ReportPage() {
   );
 }
 
-function Comparison({ label, previous, current, unit, reverse = false }: { label: string; previous: number; current: number; unit: string; reverse?: boolean }) {
-  const improved = reverse ? current < previous : current > previous;
+function Comparison({ label, previous, current, unit, reverse = false, hasPrevious, hasCurrent }: { label: string; previous: number; current: number; unit: string; reverse?: boolean; hasPrevious: boolean; hasCurrent: boolean }) {
+  const comparable = hasPrevious && hasCurrent;
+  const improved = comparable && (reverse ? current < previous : current > previous);
+  const changeCopy = !hasCurrent
+    ? "이번 기간 기록 없음"
+    : !hasPrevious
+      ? "이전 기록 없음"
+      : `${Math.abs(current - previous)}${unit} 변화`;
   return (
-    <article><span>{label}</span><strong>{previous || "—"}<small>{previous ? unit : ""}</small><i>→</i>{current || "—"}<small>{current ? unit : ""}</small></strong><em className={improved ? "is-positive" : ""}>{improved ? <TrendingUp /> : <TrendingDown />}{previous ? `${Math.abs(current - previous)}${unit} 변화` : "이전 기록 없음"}</em></article>
+    <article><span>{label}</span><strong>{hasPrevious ? previous : "—"}<small>{hasPrevious ? unit : ""}</small><i>→</i>{hasCurrent ? current : "—"}<small>{hasCurrent ? unit : ""}</small></strong><em className={improved ? "is-positive" : ""}>{improved ? <TrendingUp /> : <TrendingDown />}{changeCopy}</em></article>
   );
 }
 

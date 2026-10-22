@@ -56,7 +56,7 @@ export default function DashboardPage() {
             <Button asChild><a href="/situational-practice">연습 시작하기 <ArrowRight /></a></Button>
           </div>
           <div className="mm-sound-figure" aria-hidden="true">
-            <div className="mm-sound-bars">{[28, 52, 74].map((height, index) => <i key={index} style={{ height }} />)}</div>
+            <div className="mm-sound-bars is-left">{[28, 52, 74].map((height, index) => <i key={index} style={{ height }} />)}</div>
             <span className="mm-sound-mic"><Mic2 /></span>
             <div className="mm-sound-bars is-right">{[74, 52, 28].map((height, index) => <i key={index} style={{ height }} />)}</div>
           </div>

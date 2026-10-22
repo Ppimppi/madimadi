@@ -48,10 +48,20 @@ export function buildDashboardSummary(records: AnalysisSnapshot[]) {
 }
 
 export function buildGrowthReport(records: AnalysisSnapshot[], period: "week" | "month") {
-  const days = period === "week" ? 7 : 30;
-  const currentStart = startOfDay(Date.now() - (days - 1) * DAY_MS);
-  const previousStart = currentStart - days * DAY_MS;
-  const current = records.filter((item) => item.createdAt >= currentStart);
+  const now = Date.now();
+  const currentStart = period === "month"
+    ? startOfMonth(now)
+    : startOfDay(now - 6 * DAY_MS);
+  const currentEnd = period === "month"
+    ? shiftMonth(currentStart, 1)
+    : startOfDay(now + DAY_MS);
+  const previousStart = period === "month"
+    ? shiftMonth(currentStart, -1)
+    : currentStart - 7 * DAY_MS;
+  const days = period === "month"
+    ? Math.round((currentEnd - currentStart) / DAY_MS)
+    : 7;
+  const current = records.filter((item) => item.createdAt >= currentStart && item.createdAt < currentEnd);
   const previous = records.filter((item) => item.createdAt >= previousStart && item.createdAt < currentStart);
   const currentAverages = metricAverages(current);
   const previousAverages = metricAverages(previous);
@@ -68,7 +78,7 @@ export function buildGrowthReport(records: AnalysisSnapshot[], period: "week" | 
       speakingRate: delta(currentAverages.speakingRate, previousAverages.speakingRate, previous.length),
     },
     streakDays: calculateStreak(records),
-    daily: buildDailySeries(current, days),
+    daily: buildDailySeries(current, days, currentStart),
     recent: current.slice(0, 8).map(publicAnalysis),
   };
 }
@@ -127,13 +137,13 @@ export function calculateStreak(records: AnalysisSnapshot[]): number {
   return streak;
 }
 
-function buildDailySeries(records: AnalysisSnapshot[], days: number) {
+function buildDailySeries(records: AnalysisSnapshot[], days: number, rangeStart?: number) {
   const grouped = new Map<string, AnalysisSnapshot[]>();
   for (const record of records) {
     const key = dateKey(record.createdAt);
     grouped.set(key, [...(grouped.get(key) ?? []), record]);
   }
-  const start = startOfDay(Date.now() - (days - 1) * DAY_MS);
+  const start = rangeStart ?? startOfDay(Date.now() - (days - 1) * DAY_MS);
   return Array.from({ length: days }, (_, index) => {
     const timestamp = start + index * DAY_MS;
     const values = grouped.get(dateKey(timestamp)) ?? [];
@@ -206,4 +216,16 @@ function dateKey(value: number): string {
     timeZone: "Asia/Seoul",
   }).format(value);
 }
+
+function startOfMonth(value: number): number {
+  const [year, month] = dateKey(value).split("-");
+  return new Date(`${year}-${month}-01T00:00:00+09:00`).getTime();
+}
+
+function shiftMonth(monthStart: number, offset: number): number {
+  const inSeoul = new Date(monthStart + SEOUL_OFFSET_MS);
+  return Date.UTC(inSeoul.getUTCFullYear(), inSeoul.getUTCMonth() + offset, 1) - SEOUL_OFFSET_MS;
+}
+
+const SEOUL_OFFSET_MS = 9 * 60 * 60 * 1000;
 
