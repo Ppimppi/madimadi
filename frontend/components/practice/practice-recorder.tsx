@@ -5,16 +5,16 @@ import {
   ArrowRight,
   Camera,
   CheckCircle2,
-  CircleStop,
   Eye,
   Gauge,
   MessageCircleWarning,
-  Mic2,
   PersonStanding,
+  Play,
   RotateCcw,
   Save,
   Smile,
   Sparkles,
+  Square,
   Volume2,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
@@ -556,12 +556,36 @@ export function PracticeRecorder({ initialPracticeType = "자유 말하기", loc
             <div className="recorder-waveform">
               {waveformBars.map((height, index) => <i key={index} style={{ height }} />)}
             </div>
-            <div className={`recorder-orb ${status === "recording" ? "is-recording" : ""}`}>
-              <Mic2 />
-            </div>
           </div>
         )}
-        <strong className="recording-time" aria-live="polite">{formatTime(seconds)}</strong>
+
+        <div className="recording-control-stack">
+          <strong className="recording-time" aria-live="polite">{formatTime(seconds)}<small> / 05:00</small></strong>
+          {status === "idle" && (
+            <Button
+              className="record-control is-start"
+              onClick={startRecording}
+              disabled={motionLoading}
+              aria-label={cameraEnabled ? "영상 분석 시작" : "음성 분석 시작"}
+            >
+              <Play aria-hidden="true" fill="currentColor" />
+            </Button>
+          )}
+          {status === "recording" && (
+            <Button className="record-control is-stop" onClick={stopRecording} aria-label="녹음 종료">
+              <Square aria-hidden="true" fill="currentColor" />
+            </Button>
+          )}
+          {(status === "idle" || status === "recording") && (
+            <span className="record-control-label">
+              {motionLoading
+                ? "모델 준비 중…"
+                : status === "recording"
+                  ? cameraActive ? "영상 분석 중…" : "음성 분석 중…"
+                  : cameraEnabled ? "영상 분석 시작" : "음성 분석 시작"}
+            </span>
+          )}
+        </div>
         <p className="recording-guide">
           {status === "recording"
             ? "평소 말하듯 자연스럽게 이야기하세요. 최대 5분까지 녹음됩니다."
@@ -571,8 +595,6 @@ export function PracticeRecorder({ initialPracticeType = "자유 말하기", loc
         </p>
 
         <div className="recorder-actions">
-          {status === "idle" && <Button className="record-primary" onClick={startRecording} disabled={motionLoading}>{cameraEnabled ? <Camera /> : <Mic2 />}{motionLoading ? "모델 준비 중…" : cameraEnabled ? "영상 연습 시작" : "녹음 시작"}</Button>}
-          {status === "recording" && <Button className="record-stop" onClick={stopRecording}><CircleStop />녹음 종료</Button>}
           {(status === "recorded" || status === "complete") && <Button variant="outline" onClick={resetPractice}><RotateCcw />다시 녹음</Button>}
           {status === "recorded" && <Button className="record-primary" onClick={saveAndAnalyze} disabled={!audioBlob}><Sparkles />분석하고 저장</Button>}
           {status === "analyzing" && <Button className="record-primary" disabled><Save />분석 중…</Button>}

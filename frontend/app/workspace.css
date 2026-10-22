@@ -345,7 +345,6 @@
 .mm-main .transcript-card,
 .mm-main .analysis-result { border-color: var(--mm-line); border-radius: 13px; box-shadow: 0 7px 22px rgba(51,36,108,.045); }
 .mm-main .practice-recorder-card { background: #fff; }
-.mm-main .recorder-orb { background: linear-gradient(145deg, #f5f2ff, #e8e2ff); box-shadow: 0 0 0 15px rgba(106,79,234,.055); }
 .mm-main .record-primary { background: linear-gradient(135deg, #7259ee, #5238ce); }
 .mm-main .analysis-result { background: #fff; }
 .mm-page-analysis .practice-workspace,
