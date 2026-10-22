@@ -65,17 +65,23 @@ export default function SituationalPracticePage() {
         </TabsList>
       </Tabs>
 
-      <section className="mm-card mm-scenario-prompt">
-        <div className="mm-scenario-icon"><Icon /></div>
-        <div>
-          <span>오늘의 질문</span>
-          <h2>{scenario.questions[questionIndex]}</h2>
-          <ul>{scenario.tips.map((tip) => <li key={tip}>{tip}</li>)}</ul>
-        </div>
-        <Button variant="outline" onClick={() => setQuestionIndex((current) => (current + 1) % scenario.questions.length)}><RefreshCw />다른 질문</Button>
-      </section>
-
-      <PracticeRecorder key={`${mode}-${questionIndex}`} initialPracticeType={mode} lockedType />
+      <PracticeRecorder
+        key={`${mode}-${questionIndex}`}
+        initialPracticeType={mode}
+        lockedType
+        variant="scenario"
+        intro={(
+          <div className="mm-scenario-inline">
+            <div className="mm-scenario-icon"><Icon /></div>
+            <div>
+              <span>오늘의 질문</span>
+              <h2>{scenario.questions[questionIndex]}</h2>
+              <ul>{scenario.tips.map((tip) => <li key={tip}>{tip}</li>)}</ul>
+            </div>
+            <Button variant="outline" onClick={() => setQuestionIndex((current) => (current + 1) % scenario.questions.length)}><RefreshCw />다른 질문</Button>
+          </div>
+        )}
+      />
     </WorkspaceLayout>
   );
 }

@@ -17,7 +17,7 @@ import {
   Sparkles,
   Volume2,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -89,9 +89,13 @@ function formatTime(seconds: number) {
 type PracticeRecorderProps = {
   initialPracticeType?: PracticeType;
   lockedType?: boolean;
+  intro?: ReactNode;
+  variant?: "default" | "scenario";
 };
 
-export function PracticeRecorder({ initialPracticeType = "자유 말하기", lockedType = false }: PracticeRecorderProps = {}) {
+const waveformBars = [18, 28, 42, 31, 55, 36, 64, 47, 30, 52, 39, 70, 48, 34, 58, 43, 27, 46, 62, 37, 51, 29, 41, 22];
+
+export function PracticeRecorder({ initialPracticeType = "자유 말하기", lockedType = false, intro, variant = "default" }: PracticeRecorderProps = {}) {
   const [status, setStatus] = useState<RecorderStatus>("idle");
   const [practiceType, setPracticeType] = useState<PracticeType>(initialPracticeType);
   const [seconds, setSeconds] = useState(0);
@@ -504,10 +508,11 @@ export function PracticeRecorder({ initialPracticeType = "자유 말하기", loc
   }
 
   return (
-    <div className="practice-workspace">
+    <div className={`practice-workspace ${variant === "scenario" ? "is-scenario" : ""}`}>
       <section className="practice-recorder-card">
-        <div className="practice-options">
-          <div>
+        {intro}
+        <div className={`practice-options ${lockedType ? "is-locked" : ""}`}>
+          {!lockedType && <div>
             <label htmlFor="practice-type">연습 상황</label>
             <select
               id="practice-type"
@@ -518,7 +523,7 @@ export function PracticeRecorder({ initialPracticeType = "자유 말하기", loc
             >
               {PRACTICE_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
             </select>
-          </div>
+          </div>}
           <span className={`recording-state ${status === "recording" ? "is-live" : ""}`}>
             <i /> {motionLoading ? "모델 준비 중" : status === "recording" ? (cameraActive ? "영상 분석 중" : "녹음 중") : status === "complete" ? "분석 완료" : "준비됨"}
           </span>
@@ -542,8 +547,13 @@ export function PracticeRecorder({ initialPracticeType = "자유 말하기", loc
         ) : videoUrl ? (
           <video className="camera-preview recorded-video" controls playsInline src={videoUrl}>녹화 영상을 재생할 수 없습니다.</video>
         ) : (
-          <div className={`recorder-orb ${status === "recording" ? "is-recording" : ""}`}>
-            <Mic2 aria-hidden="true" />
+          <div className="recorder-visual" aria-hidden="true">
+            <div className="recorder-waveform">
+              {waveformBars.map((height, index) => <i key={index} style={{ height }} />)}
+            </div>
+            <div className={`recorder-orb ${status === "recording" ? "is-recording" : ""}`}>
+              <Mic2 />
+            </div>
           </div>
         )}
         <strong className="recording-time" aria-live="polite">{formatTime(seconds)}</strong>

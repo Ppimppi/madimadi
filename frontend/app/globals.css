@@ -1423,7 +1423,7 @@ a {
 .practice-workspace {
   margin-top: 30px;
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(330px, 0.95fr);
+  grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.8fr);
   gap: 18px;
   align-items: stretch;
 }
@@ -1450,6 +1450,10 @@ a {
   justify-content: space-between;
   gap: 16px;
   text-align: left;
+}
+
+.practice-options.is-locked {
+  justify-content: flex-end;
 }
 
 .practice-options label {
@@ -1599,6 +1603,34 @@ div.camera-preview video {
 
 .recorded-video { background: #111; }
 
+.recorder-visual {
+  width: min(100%, 470px);
+  min-height: 154px;
+  margin: 24px auto 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.recorder-waveform {
+  width: min(100%, 390px);
+  height: 70px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.recorder-waveform i {
+  width: 4px;
+  min-height: 8px;
+  border-radius: 99px;
+  background: linear-gradient(180deg, #8f7afb, #6048e4);
+  opacity: 0.82;
+}
+
 .recorder-orb {
   width: 116px;
   height: 116px;
@@ -1615,6 +1647,18 @@ div.camera-preview video {
 .recorder-orb svg {
   width: 40px;
   height: 40px;
+}
+
+.recorder-visual .recorder-orb {
+  width: 72px;
+  height: 72px;
+  margin: 6px auto 0;
+  box-shadow: 0 0 0 9px rgba(112, 91, 236, 0.055);
+}
+
+.recorder-visual .recorder-orb svg {
+  width: 28px;
+  height: 28px;
 }
 
 .recorder-orb.is-recording {

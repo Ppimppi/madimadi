@@ -16,7 +16,7 @@ export function WorkspaceLayout({ active, user, eyebrow, title, description, chi
   return (
     <main className="mm-shell">
       <DashboardSidebar active={active} />
-      <section className="mm-main">
+      <section className={`mm-main mm-page-${active}`}>
         <header className="mm-topbar">
           <div className="mm-heading">
             <span>{eyebrow}</span>
