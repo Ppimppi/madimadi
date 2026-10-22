@@ -174,7 +174,7 @@ export default function SettingsPage() {
 
           <TabsContent value="info">
             <SettingsHeading icon={Info} title="서비스 정보" copy="현재 사용 중인 마디마디 버전입니다." />
-            <dl className="mm-info-list"><div><dt>서비스</dt><dd>마디마디 AI 말하기 코칭</dd></div><div><dt>버전</dt><dd>2.0 Gemini</dd></div><div><dt>음성 분석</dt><dd>Google Gemini</dd></div><div><dt>분석 기록</dt><dd>회원 계정에 안전하게 저장</dd></div></dl>
+            <dl className="mm-info-list"><div><dt>서비스</dt><dd>마디마디 AI 말하기 코칭</dd></div><div><dt>버전</dt><dd>2.1 Motion</dd></div><div><dt>음성 분석</dt><dd>Google Gemini</dd></div><div><dt>영상 분석</dt><dd>Google MediaPipe 브라우저 처리</dd></div><div><dt>분석 기록</dt><dd>회원 계정에 안전하게 저장</dd></div></dl>
           </TabsContent>
         </div>
       </Tabs>

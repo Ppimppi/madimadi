@@ -6,6 +6,7 @@ import { rateLimit } from "express-rate-limit";
 import { getCurrentUser, isSameOriginRequest } from "../auth.js";
 import { db } from "../db.js";
 import { parseFillerDetails } from "../insights.js";
+import { parseStoredMotionAnalysis } from "../motion-analysis.js";
 import { analyses } from "../schema.js";
 
 export const coachRouter = Router();
@@ -38,6 +39,7 @@ coachRouter.post("/", coachRateLimit, async (req, res) => {
     fillerDetails: analyses.fillerDetails,
     speakingRate: analyses.speakingRate,
     score: analyses.score,
+    motionMetrics: analyses.motionMetrics,
     createdAt: analyses.createdAt,
   }).from(analyses).where(eq(analyses.userId, user.id)).orderBy(desc(analyses.createdAt)).limit(5);
 
@@ -45,7 +47,11 @@ coachRouter.post("/", coachRateLimit, async (req, res) => {
     ? recent.map((item, index) => {
       const fillers = Object.entries(parseFillerDetails(item.fillerDetails))
         .map(([word, count]) => `${word} ${count}회`).join(", ") || "감지 없음";
-      return `${index + 1}. ${item.practiceType}: ${item.score}점, ${item.speakingRate}어절/분, 추임새 ${item.fillerCount}회(${fillers})`;
+      const motion = parseStoredMotionAnalysis(item.motionMetrics);
+      const motionText = motion
+        ? `, 영상 ${motion.score}점(카메라 응시 ${motion.eyeContactRate}%, 상체 정렬 ${motion.postureRate}%, 안정도 ${motion.stabilityScore}%${motion.expressionScore === null ? "" : `, 표정 자연스러움 ${motion.expressionScore}점, 미소 감지 ${motion.smileRate}%`})`
+        : "";
+      return `${index + 1}. ${item.practiceType}: ${item.score}점, ${item.speakingRate}어절/분, 추임새 ${item.fillerCount}회(${fillers})${motionText}`;
     }).join("\n")
     : "아직 완료한 분석 기록이 없습니다.";
   const conversation = messages.map((item) => `${item.role === "user" ? "사용자" : "코치"}: ${item.content}`).join("\n");

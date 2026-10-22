@@ -11,6 +11,8 @@ export type SpeechAnalysisResult = {
   summary: string;
   goodPoints: string[];
   improvements: string[];
+  motion: import("./motion-analysis").MotionAnalysisResult | null;
+  speechScore: number;
 };
 
 export function isPracticeType(value: unknown): value is PracticeType {

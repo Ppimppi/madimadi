@@ -231,27 +231,49 @@
 .mm-weekly-challenge a:hover { background: #f3f0ff; color: var(--mm-purple-dark); }
 
 .mm-sound-figure {
-  width: 170px;
+  width: 205px;
   height: 145px;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  position: relative;
+  gap: 16px;
 }
 
-.mm-sound-figure svg {
-  position: absolute;
-  width: 48px;
-  height: 48px;
+.mm-sound-mic {
+  width: 76px;
+  height: 76px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, .3);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .12);
+  box-shadow: 0 12px 28px rgba(39, 22, 117, .18);
+}
+
+.mm-sound-mic svg {
+  width: 39px;
+  height: 39px;
   color: #fff;
-  opacity: .96;
+  opacity: .98;
 }
 
-.mm-sound-figure i { width: 5px; border-radius: 99px; background: rgba(255,255,255,.35); }
-.mm-sound-figure i:nth-of-type(-n+3) { transform: translateX(-32px); }
-.mm-sound-figure i:nth-of-type(n+5) { transform: translateX(32px); }
+.mm-sound-bars {
+  height: 78px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mm-sound-bars i {
+  width: 6px;
+  max-height: 100%;
+  border-radius: 99px;
+  background: rgba(255,255,255,.42);
+}
+
+.mm-sound-bars.is-right { transform: scaleX(-1); }
 
 .mm-stat-grid {
   margin-top: 17px;
@@ -515,7 +537,11 @@
   .mm-dashboard-lead, .mm-chart-grid, .mm-coach-layout { grid-template-columns: 1fr; }
   .mm-today-score { min-height: 180px; }
   .mm-weekly-challenge { min-height: 210px; }
-  .mm-sound-figure { width: 125px; }
+  .mm-sound-figure { width: 178px; gap: 11px; }
+  .mm-sound-mic { width: 66px; height: 66px; }
+  .mm-sound-mic svg { width: 34px; height: 34px; }
+  .mm-sound-bars { gap: 4px; }
+  .mm-sound-bars i { width: 5px; }
   .mm-settings-layout { grid-template-columns: 1fr; }
   .mm-settings-nav { display: flex !important; overflow-x: auto; }
   .mm-settings-nav button { width: auto; min-width: fit-content; }

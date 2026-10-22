@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { raw, Router } from "express";
 import { rateLimit } from "express-rate-limit";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { getCurrentUser, isSameOriginRequest } from "../auth.js";
 import { db } from "../db.js";
@@ -11,6 +11,7 @@ import {
   GeminiTranscriptionError,
   transcribeKoreanSpeech,
 } from "../gemini-transcription.js";
+import { parseMotionAnalysis, parseStoredMotionAnalysis, type MotionAnalysisResult } from "../motion-analysis.js";
 import { analyses } from "../schema.js";
 import { analyzeSpeech, isPracticeType } from "../speech-analysis.js";
 
@@ -40,6 +41,7 @@ analysesRouter.post("/", analyzeRateLimit, audioBodyParser, async (req, res) => 
   const durationSeconds = Math.round(Number(singleQueryValue(req.query.durationSeconds)));
   const practiceTypeValue = singleQueryValue(req.query.practiceType);
   const practiceType = isPracticeType(practiceTypeValue) ? practiceTypeValue : "자유 말하기";
+  const motion = parseMotionAnalysis(req.query as Record<string, string | string[] | undefined>);
   if (!Number.isFinite(durationSeconds) || durationSeconds < 3 || durationSeconds > 30 * 60) {
     return res.status(400).json({ error: "3초 이상 30분 이하의 연습만 분석할 수 있습니다." });
   }
@@ -67,10 +69,24 @@ analysesRouter.post("/", analyzeRateLimit, audioBodyParser, async (req, res) => 
     return res.status(422).json({ error: "음성에서 분석할 말을 찾지 못했습니다." });
   }
 
-  const result = analyzeSpeech(transcript, durationSeconds);
+  const speechResult = analyzeSpeech(transcript, durationSeconds);
+  const score = motion ? Math.round(speechResult.score * 0.7 + motion.score * 0.3) : speechResult.score;
+  const result = { ...speechResult, speechScore: speechResult.score, score, motion };
   const id = randomUUID();
   const createdAt = Date.now();
   try {
+    const [previous] = await db.select({
+      id: analyses.id,
+      createdAt: analyses.createdAt,
+      score: analyses.score,
+      fillerCount: analyses.fillerCount,
+      speakingRate: analyses.speakingRate,
+      motionMetrics: analyses.motionMetrics,
+    }).from(analyses).where(and(
+      eq(analyses.userId, user.id),
+      eq(analyses.practiceType, practiceType),
+    )).orderBy(desc(analyses.createdAt)).limit(1);
+
     await db.insert(analyses).values({
       id,
       userId: user.id,
@@ -83,9 +99,13 @@ analysesRouter.post("/", analyzeRateLimit, audioBodyParser, async (req, res) => 
       speakingRate: result.speakingRate,
       score: result.score,
       feedback: JSON.stringify({ summary: result.summary, goodPoints: result.goodPoints, improvements: result.improvements }),
+      motionMetrics: motion ? JSON.stringify(motion) : null,
       createdAt,
     });
-    return res.status(201).json({ analysis: { id, practiceType, transcript, durationSeconds, createdAt, ...result } });
+    const comparison = previous
+      ? buildAnalysisComparison(previous, result, practiceType)
+      : null;
+    return res.status(201).json({ analysis: { id, practiceType, transcript, durationSeconds, createdAt, ...result }, comparison });
   } catch (error) {
     console.error("Analysis persistence failed", error);
     return res.status(500).json({ error: "분석 결과를 저장하지 못했습니다. 잠시 후 다시 시도해주세요." });
@@ -124,6 +144,7 @@ async function loadAnalysisHistory(userId: string) {
     fillerDetails: analyses.fillerDetails,
     speakingRate: analyses.speakingRate,
     score: analyses.score,
+    motionMetrics: analyses.motionMetrics,
     createdAt: analyses.createdAt,
   }).from(analyses).where(eq(analyses.userId, userId)).orderBy(desc(analyses.createdAt)).limit(1_000);
 }
@@ -145,4 +166,94 @@ function isSupportedAudioType(value: string): boolean {
     "audio/wav",
     "audio/x-wav",
   ].includes(mimeType);
+}
+
+type PreviousAnalysis = {
+  id: string;
+  createdAt: number;
+  score: number;
+  fillerCount: number;
+  speakingRate: number;
+  motionMetrics: string | null;
+};
+
+type CurrentAnalysis = {
+  score: number;
+  fillerCount: number;
+  speakingRate: number;
+  motion: MotionAnalysisResult | null;
+};
+
+type ComparisonMetric = {
+  key: string;
+  label: string;
+  before: number;
+  after: number;
+  unit: string;
+  delta: number;
+  improved: boolean | null;
+};
+
+function buildAnalysisComparison(previous: PreviousAnalysis, current: CurrentAnalysis, practiceType: string) {
+  const previousMotion = parseStoredMotionAnalysis(previous.motionMetrics);
+  const metrics: ComparisonMetric[] = [
+    comparisonMetric("score", "종합 점수", previous.score, current.score, "점", "higher"),
+    comparisonMetric("fillerCount", "추임새", previous.fillerCount, current.fillerCount, "회", "lower"),
+    comparisonMetric("speakingRate", "말하기 속도", previous.speakingRate, current.speakingRate, "어절/분", "target"),
+  ];
+
+  if (previousMotion && current.motion) {
+    metrics.push(
+      comparisonMetric("motionScore", "영상 점수", previousMotion.score, current.motion.score, "점", "higher"),
+      comparisonMetric("eyeContactRate", "카메라 응시", previousMotion.eyeContactRate, current.motion.eyeContactRate, "%", "higher"),
+      comparisonMetric("postureRate", "상체 정렬", previousMotion.postureRate, current.motion.postureRate, "%", "higher"),
+    );
+    if (previousMotion.expressionScore !== null && current.motion.expressionScore !== null) {
+      metrics.push(comparisonMetric(
+        "expressionScore",
+        "표정 자연스러움",
+        previousMotion.expressionScore,
+        current.motion.expressionScore,
+        "점",
+        "higher",
+      ));
+    }
+  }
+
+  const improvedCount = metrics.filter((metric) => metric.improved === true).length;
+  const summary = improvedCount >= 3
+    ? `직전 ${practiceType} 연습보다 ${improvedCount}개 지표가 좋아졌어요.`
+    : improvedCount > 0
+      ? `직전 ${practiceType} 연습보다 좋아진 지표가 있어요. 다음 목표도 함께 확인해보세요.`
+      : `직전 ${practiceType} 연습과 비교한 결과예요. 변화가 필요한 지표를 다음 연습 목표로 잡아보세요.`;
+
+  return {
+    previousId: previous.id,
+    previousCreatedAt: previous.createdAt,
+    practiceType,
+    summary,
+    metrics,
+  };
+}
+
+function comparisonMetric(
+  key: string,
+  label: string,
+  before: number,
+  after: number,
+  unit: string,
+  direction: "higher" | "lower" | "target",
+): ComparisonMetric {
+  const delta = after - before;
+  let improved: boolean | null;
+  if (delta === 0) improved = null;
+  else if (direction === "higher") improved = delta > 0;
+  else if (direction === "lower") improved = delta < 0;
+  else {
+    const target = 125;
+    const beforeDistance = Math.abs(before - target);
+    const afterDistance = Math.abs(after - target);
+    improved = beforeDistance === afterDistance ? null : afterDistance < beforeDistance;
+  }
+  return { key, label, before, after, unit, delta, improved };
 }

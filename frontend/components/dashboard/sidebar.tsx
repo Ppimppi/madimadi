@@ -9,7 +9,7 @@ type DashboardSidebarProps = { active: WorkspacePage };
 
 const links: Array<{ id: WorkspacePage; href: string; label: string; icon: typeof BarChart3 }> = [
   { id: "dashboard", href: "/dashboard", label: "대시보드", icon: BarChart3 },
-  { id: "analysis", href: "/practice", label: "음성 분석", icon: Mic2 },
+  { id: "analysis", href: "/practice", label: "음성·영상 분석", icon: Mic2 },
   { id: "practice", href: "/situational-practice", label: "상황별 연습", icon: MessageSquareText },
   { id: "report", href: "/report", label: "성장 리포트", icon: ChartNoAxesCombined },
   { id: "coach", href: "/coach", label: "AI 코치", icon: Bot },

@@ -9,6 +9,7 @@ export type AnalysisSummaryItem = {
   fillerDetails: Record<string, number>;
   speakingRate: number;
   score: number;
+  motion?: import("./motion-analysis").MotionAnalysisResult | null;
   createdAt: number;
 };
 

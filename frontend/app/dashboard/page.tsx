@@ -55,7 +55,11 @@ export default function DashboardPage() {
             <p>60초 동안 핵심부터 말하고, AI 분석으로 바로 확인해보세요.</p>
             <Button asChild><a href="/situational-practice">연습 시작하기 <ArrowRight /></a></Button>
           </div>
-          <div className="mm-sound-figure" aria-hidden="true"><Mic2 />{[20, 38, 62, 44, 70, 34, 54].map((height, index) => <i key={index} style={{ height }} />)}</div>
+          <div className="mm-sound-figure" aria-hidden="true">
+            <div className="mm-sound-bars">{[28, 52, 74].map((height, index) => <i key={index} style={{ height }} />)}</div>
+            <span className="mm-sound-mic"><Mic2 /></span>
+            <div className="mm-sound-bars is-right">{[74, 52, 28].map((height, index) => <i key={index} style={{ height }} />)}</div>
+          </div>
         </article>
       </section>
 

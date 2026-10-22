@@ -38,5 +38,6 @@ export const analyses = pgTable("analyses", {
   speakingRate: integer("speaking_rate").notNull(),
   score: integer("score").notNull(),
   feedback: text("feedback").notNull(),
+  motionMetrics: text("motion_metrics"),
   createdAt: bigint("created_at", { mode: "number" }).notNull(),
 }, (table) => [index("idx_analyses_user_created").on(table.userId, table.createdAt)]);

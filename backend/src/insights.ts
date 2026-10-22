@@ -1,3 +1,5 @@
+import { parseStoredMotionAnalysis } from "./motion-analysis.js";
+
 export type AnalysisSnapshot = {
   id: string;
   practiceType: string;
@@ -7,6 +9,7 @@ export type AnalysisSnapshot = {
   fillerDetails: string;
   speakingRate: number;
   score: number;
+  motionMetrics?: string | null;
   createdAt: number;
 };
 
@@ -155,6 +158,7 @@ function publicAnalysis(item: AnalysisSnapshot) {
     fillerDetails: parseFillerDetails(item.fillerDetails),
     speakingRate: item.speakingRate,
     score: item.score,
+    motion: parseStoredMotionAnalysis(item.motionMetrics),
     createdAt: item.createdAt,
   };
 }
@@ -202,3 +206,4 @@ function dateKey(value: number): string {
     timeZone: "Asia/Seoul",
   }).format(value);
 }
+
