@@ -142,11 +142,12 @@ export default function Home() {
             말 한마디부터 달라지는 AI 스피치 코치
           </div>
           <h1 id="hero-title">
-            당신의 말버릇을 분석하고
-            <br />
-            <span>더 나은 말하기 습관</span>을
-            <br />
-            만들어드립니다.
+            <span className="hero-title-row">당신의 말버릇을</span>
+            <span className="hero-title-row">분석하고</span>
+            <span className="hero-title-row hero-title-emphasis">
+              <span className="hero-highlight">더 나은 말하기 습관</span>을
+            </span>
+            <span className="hero-title-row">만들어드립니다.</span>
           </h1>
           <p>
             AI가 음성을 분석하여 말버릇과 말하기 속도, 발음, 전달력을
