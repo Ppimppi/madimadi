@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { Request, Response } from "express";
 
 import { appUrl, isProduction } from "./env.js";
@@ -7,12 +7,13 @@ export type OAuthProvider = "google" | "kakao";
 
 export function getOAuthConfig(provider: OAuthProvider) {
   if (provider === "google") {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const clientId = readSecret("GOOGLE_CLIENT_ID");
+    const clientSecret = readSecret("GOOGLE_CLIENT_SECRET");
     return clientId && clientSecret ? { clientId, clientSecret } : null;
   }
-  const clientId = process.env.KAKAO_REST_API_KEY;
-  return clientId ? { clientId, clientSecret: process.env.KAKAO_CLIENT_SECRET ?? "" } : null;
+  const clientId = readSecret("KAKAO_REST_API_KEY");
+  const clientSecret = readSecret("KAKAO_CLIENT_SECRET");
+  return clientId && clientSecret ? { clientId, clientSecret } : null;
 }
 
 export function oauthCallbackUrl(provider: OAuthProvider): string {
@@ -43,11 +44,26 @@ export function clearOAuthStateCookie(res: Response, provider: OAuthProvider): v
 }
 
 export function validOAuthState(req: Request, provider: OAuthProvider, returnedState: unknown): boolean {
-  return typeof returnedState === "string"
-    && /^[a-f0-9]{64}$/.test(returnedState)
-    && req.cookies?.[`madimadi_${provider}_oauth_state`] === returnedState;
+  const expectedState = req.cookies?.[`madimadi_${provider}_oauth_state`] as unknown;
+  if (
+    typeof returnedState !== "string"
+    || typeof expectedState !== "string"
+    || !/^[a-f0-9]{64}$/.test(returnedState)
+    || !/^[a-f0-9]{64}$/.test(expectedState)
+  ) {
+    return false;
+  }
+
+  return timingSafeEqual(Buffer.from(expectedState, "hex"), Buffer.from(returnedState, "hex"));
 }
 
-export function loginErrorRedirect(res: Response, code: string): void {
+export function loginErrorRedirect(res: Response, code: string, provider?: OAuthProvider): void {
+  if (provider) clearOAuthStateCookie(res, provider);
+  res.setHeader("Cache-Control", "no-store");
   res.redirect(302, new URL(`/login?oauth=${encodeURIComponent(code)}`, appUrl()).toString());
+}
+
+function readSecret(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value || undefined;
 }

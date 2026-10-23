@@ -147,14 +147,18 @@ authRouter.get("/oauth/google", (req, res) => {
   url.searchParams.set("state", state);
   url.searchParams.set("prompt", "select_account");
   setOAuthStateCookie(res, "google", state);
+  res.setHeader("Cache-Control", "no-store");
   return res.redirect(302, url.toString());
 });
 
 authRouter.get("/oauth/google/callback", async (req, res) => {
-  if (req.query.error) return loginErrorRedirect(res, "oauth_denied");
-  if (typeof req.query.code !== "string" || !validOAuthState(req, "google", req.query.state)) return loginErrorRedirect(res, "oauth_state");
+  if (req.query.error) return loginErrorRedirect(res, "oauth_denied", "google");
+  if (typeof req.query.code !== "string" || !validOAuthState(req, "google", req.query.state)) {
+    return loginErrorRedirect(res, "oauth_state", "google");
+  }
+  clearOAuthStateCookie(res, "google");
   const config = getOAuthConfig("google");
-  if (!config) return loginErrorRedirect(res, "google_not_configured");
+  if (!config) return loginErrorRedirect(res, "google_not_configured", "google");
   try {
     const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -167,14 +171,16 @@ authRouter.get("/oauth/google/callback", async (req, res) => {
     const profileResponse = await fetch("https://openidconnect.googleapis.com/v1/userinfo", { headers: { Authorization: `Bearer ${tokens.access_token}` } });
     if (!profileResponse.ok) throw new Error("Google user info failed");
     const profile = await profileResponse.json() as { sub?: string; email?: string; email_verified?: boolean; name?: string };
-    if (!profile.sub || !profile.email || profile.email_verified !== true) return loginErrorRedirect(res, "oauth_email");
+    if (!profile.sub || !profile.email || profile.email_verified !== true) {
+      return loginErrorRedirect(res, "oauth_email", "google");
+    }
     const token = await createOAuthSession({ provider: "google", providerAccountId: profile.sub, email: normalizeEmail(profile.email), name: profile.name ?? profile.email.split("@")[0] });
-    clearOAuthStateCookie(res, "google");
     setSessionCookie(res, token);
+    res.setHeader("Cache-Control", "no-store");
     return res.redirect(302, new URL("/dashboard", appUrl()).toString());
   } catch (error) {
     console.error("Google OAuth failed", error);
-    return loginErrorRedirect(res, "oauth_exchange");
+    return loginErrorRedirect(res, "oauth_exchange", "google");
   }
 });
 
@@ -188,18 +194,23 @@ authRouter.get("/oauth/kakao", (req, res) => {
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", "account_email,profile_nickname");
   url.searchParams.set("state", state);
+  url.searchParams.set("prompt", "select_account");
   setOAuthStateCookie(res, "kakao", state);
+  res.setHeader("Cache-Control", "no-store");
   return res.redirect(302, url.toString());
 });
 
 authRouter.get("/oauth/kakao/callback", async (req, res) => {
-  if (req.query.error) return loginErrorRedirect(res, "oauth_denied");
-  if (typeof req.query.code !== "string" || !validOAuthState(req, "kakao", req.query.state)) return loginErrorRedirect(res, "oauth_state");
+  if (req.query.error) return loginErrorRedirect(res, "oauth_denied", "kakao");
+  if (typeof req.query.code !== "string" || !validOAuthState(req, "kakao", req.query.state)) {
+    return loginErrorRedirect(res, "oauth_state", "kakao");
+  }
+  clearOAuthStateCookie(res, "kakao");
   const config = getOAuthConfig("kakao");
-  if (!config) return loginErrorRedirect(res, "kakao_not_configured");
+  if (!config) return loginErrorRedirect(res, "kakao_not_configured", "kakao");
   try {
     const body = new URLSearchParams({ grant_type: "authorization_code", client_id: config.clientId, redirect_uri: oauthCallbackUrl("kakao"), code: req.query.code });
-    if (config.clientSecret) body.set("client_secret", config.clientSecret);
+    body.set("client_secret", config.clientSecret);
     const tokenResponse = await fetch("https://kauth.kakao.com/oauth/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded;charset=utf-8" }, body });
     if (!tokenResponse.ok) throw new Error("Kakao token exchange failed");
     const tokens = await tokenResponse.json() as { access_token?: string };
@@ -213,14 +224,16 @@ authRouter.get("/oauth/kakao/callback", async (req, res) => {
     };
     const account = profile.kakao_account;
     const email = account?.email ? normalizeEmail(account.email) : "";
-    if (profile.id === undefined || !email || account?.is_email_valid === false || account?.is_email_verified === false) return loginErrorRedirect(res, "oauth_email");
+    if (profile.id === undefined || !email || account?.is_email_valid !== true || account?.is_email_verified !== true) {
+      return loginErrorRedirect(res, "oauth_email", "kakao");
+    }
     const token = await createOAuthSession({ provider: "kakao", providerAccountId: String(profile.id), email, name: account?.profile?.nickname ?? profile.properties?.nickname ?? email.split("@")[0] });
-    clearOAuthStateCookie(res, "kakao");
     setSessionCookie(res, token);
+    res.setHeader("Cache-Control", "no-store");
     return res.redirect(302, new URL("/dashboard", appUrl()).toString());
   } catch (error) {
     console.error("Kakao OAuth failed", error);
-    return loginErrorRedirect(res, "oauth_exchange");
+    return loginErrorRedirect(res, "oauth_exchange", "kakao");
   }
 });
 
