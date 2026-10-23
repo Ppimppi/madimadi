@@ -11,7 +11,7 @@ export default function PracticePage() {
 
   return (
     <WorkspaceLayout active="analysis" user={user} eyebrow="SPEECH & MOTION ANALYSIS" title="음성·영상 분석" description="Gemini가 말하기 습관을, MediaPipe가 카메라 응시와 상체 자세를 함께 분석합니다.">
-      <PracticeRecorder />
+      <PracticeRecorder lockedType />
     </WorkspaceLayout>
   );
 }
