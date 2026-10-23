@@ -397,6 +397,9 @@
 .mm-scenario-inline ul { margin: 0; padding-left: 16px; color: #7b7586; font-size: 11px; line-height: 1.5; }
 .mm-scenario-inline button { height: 37px; padding: 0 11px; border-radius: 9px; font-size: 11px; }
 .mm-scenario-inline button svg { width: 14px; }
+.mm-scenario-inline .mm-spin { animation: mmQuestionSpin .8s linear infinite; }
+.mm-question-error { margin: 7px 0 0; color: #a85a63; font-size: 10px; line-height: 1.45; }
+@keyframes mmQuestionSpin { to { transform: rotate(360deg); } }
 
 /* 성장 리포트 */
 .mm-report-tabs { margin-top: 30px; }

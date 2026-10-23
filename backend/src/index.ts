@@ -7,6 +7,7 @@ import { pool } from "./db.js";
 import { analysesRouter } from "./routes/analyses.js";
 import { authRouter } from "./routes/auth.js";
 import { coachRouter } from "./routes/coach.js";
+import { practiceRouter } from "./routes/practice.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 4000);
@@ -27,6 +28,7 @@ app.get("/health", async (_req, res) => {
 app.use("/api/auth", authRouter);
 app.use("/api/analyses", analysesRouter);
 app.use("/api/coach", coachRouter);
+app.use("/api/practice", practiceRouter);
 app.use((_req, res) => res.status(404).json({ error: "요청한 API를 찾을 수 없습니다." }));
 app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   if (isRequestTooLargeError(error)) {

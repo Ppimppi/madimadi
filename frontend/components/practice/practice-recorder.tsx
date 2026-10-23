@@ -25,7 +25,7 @@ import { Switch } from "@/components/ui/switch";
 import { MotionAnalyzer, type MotionAnalysisResult } from "@/lib/motion-analysis";
 import { PRACTICE_TYPES, type PracticeType, type SpeechAnalysisResult } from "@/lib/speech-analysis";
 
-type RecorderStatus = "idle" | "recording" | "recorded" | "analyzing" | "complete";
+export type RecorderStatus = "idle" | "recording" | "recorded" | "analyzing" | "complete";
 
 type SavedAnalysis = SpeechAnalysisResult & {
   id: string;
@@ -90,7 +90,9 @@ function formatTime(seconds: number) {
 type PracticeRecorderProps = {
   initialPracticeType?: PracticeType;
   lockedType?: boolean;
+  disabled?: boolean;
   intro?: ReactNode;
+  onStatusChange?: (status: RecorderStatus) => void;
   scenarioPrompt?: string;
   variant?: "default" | "scenario";
 };
@@ -105,7 +107,9 @@ const waveformBars = [
 export function PracticeRecorder({
   initialPracticeType = "자유 말하기",
   lockedType = false,
+  disabled = false,
   intro,
+  onStatusChange,
   scenarioPrompt,
   variant = "default",
 }: PracticeRecorderProps = {}) {
@@ -145,7 +149,8 @@ export function PracticeRecorder({
   const changeStatus = useCallback((nextStatus: RecorderStatus) => {
     statusRef.current = nextStatus;
     setStatus(nextStatus);
-  }, []);
+    onStatusChange?.(nextStatus);
+  }, [onStatusChange]);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -272,7 +277,7 @@ export function PracticeRecorder({
   }, [clearTimer, status, stopRecording]);
 
   async function startRecording() {
-    if (startingRef.current || statusRef.current === "recording") return;
+    if (disabled || startingRef.current || statusRef.current === "recording") return;
     startingRef.current = true;
     setError("");
     setNotice("");
@@ -542,7 +547,7 @@ export function PracticeRecorder({
             </select>
           </div>}
           <span className={`recording-state ${status === "recording" ? "is-live" : ""}`}>
-            <i /> {motionLoading ? "모델 준비 중" : status === "recording" ? (cameraActive ? "영상 분석 중" : "녹음 중") : status === "complete" ? "분석 완료" : "준비됨"}
+            <i /> {disabled ? "질문 준비 중" : motionLoading ? "모델 준비 중" : status === "recording" ? (cameraActive ? "영상 분석 중" : "녹음 중") : status === "complete" ? "분석 완료" : "준비됨"}
           </span>
         </div>
 
@@ -551,7 +556,7 @@ export function PracticeRecorder({
           <Switch
             checked={cameraEnabled}
             onCheckedChange={setCameraEnabled}
-            disabled={status !== "idle" || motionLoading}
+            disabled={disabled || status !== "idle" || motionLoading}
             aria-label="카메라 모션 분석 사용"
           />
         </div>
@@ -577,7 +582,7 @@ export function PracticeRecorder({
             <Button
               className="record-control is-start"
               onClick={startRecording}
-              disabled={motionLoading}
+              disabled={disabled || motionLoading}
               aria-label={cameraEnabled ? "영상 분석 시작" : "음성 분석 시작"}
             >
               <Play aria-hidden="true" fill="currentColor" />
@@ -590,8 +595,10 @@ export function PracticeRecorder({
           )}
           {(status === "idle" || status === "recording") && (
             <span className="record-control-label">
-              {motionLoading
-                ? "모델 준비 중…"
+              {disabled
+                ? "질문 준비 중…"
+                : motionLoading
+                  ? "모델 준비 중…"
                 : status === "recording"
                   ? cameraActive ? "영상 분석 중…" : "음성 분석 중…"
                   : cameraEnabled ? "영상 분석 시작" : "음성 분석 시작"}
@@ -599,8 +606,10 @@ export function PracticeRecorder({
           )}
         </div>
         <p className="recording-guide">
-          {status === "recording"
-            ? "평소 말하듯 자연스럽게 이야기하세요. 최대 5분까지 녹음됩니다."
+          {disabled
+            ? "새 연습 질문이 준비되면 녹음을 시작할 수 있어요."
+            : status === "recording"
+              ? "평소 말하듯 자연스럽게 이야기하세요. 최대 5분까지 녹음됩니다."
             : status === "idle"
               ? "버튼을 누르고 30초 이상 말하면 더 정확하게 분석할 수 있어요."
               : "녹음을 들어보고 받아쓰기 내용을 확인한 뒤 분석을 시작하세요."}
@@ -628,7 +637,7 @@ export function PracticeRecorder({
             setTranscript(event.target.value);
             finalTranscriptRef.current = event.target.value;
           }}
-          disabled={status === "analyzing"}
+          disabled={disabled || status === "analyzing"}
           placeholder="녹음 중에는 실시간 자막이 표시되고, 분석 후에는 AI가 음성 원본에서 만든 정확한 받아쓰기로 교체됩니다."
           aria-label="녹음 받아쓰기 내용"
         />
