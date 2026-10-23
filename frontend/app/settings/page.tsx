@@ -68,7 +68,8 @@ export default function SettingsPage() {
 
   async function changePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const data = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const data = new FormData(form);
     setSaving(true);
     setNotice("");
     setFormError("");
@@ -79,7 +80,7 @@ export default function SettingsPage() {
         body: JSON.stringify({ currentPassword: data.get("currentPassword"), newPassword: data.get("newPassword"), passwordConfirm: data.get("passwordConfirm") }),
       });
       if (!response.ok) throw new Error(await readApiError(response, "비밀번호를 변경하지 못했습니다."));
-      event.currentTarget.reset();
+      form.reset();
       setNotice("비밀번호를 변경했습니다.");
     } catch (caught) {
       setFormError(caught instanceof Error ? caught.message : "비밀번호를 변경하지 못했습니다.");

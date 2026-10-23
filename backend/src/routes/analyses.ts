@@ -57,7 +57,11 @@ analysesRouter.post("/", analyzeRateLimit, audioBodyParser, async (req, res) => 
 
   let transcript: string;
   try {
-    transcript = await transcribeKoreanSpeech({ audio: req.body, mimeType: contentType });
+    transcript = await transcribeKoreanSpeech({
+      audio: req.body,
+      mimeType: contentType,
+      context: [practiceType, practicePrompt].filter(Boolean).join(" "),
+    });
   } catch (error) {
     if (error instanceof GeminiConfigurationError) {
       console.error("AI analysis is not configured", error.message);
@@ -77,71 +81,85 @@ analysesRouter.post("/", analyzeRateLimit, audioBodyParser, async (req, res) => 
     return res.status(422).json({ error: "음성에서 분석할 말을 찾지 못했습니다." });
   }
 
-  const speechResult = analyzeSpeech(transcript, durationSeconds);
-  let contentEvaluation: ContentEvaluation | null = null;
-  if (practicePrompt) {
-    try {
-      contentEvaluation = await evaluateSpeechContent({ practiceType, prompt: practicePrompt, transcript });
-    } catch (error) {
-      console.error("Content relevance evaluation skipped", error instanceof Error ? error.message : error);
-    }
-  }
-
-  const score = combinedScore(speechResult.score, motion, contentEvaluation);
-  const summary = overallSummary(score, contentEvaluation);
-  const result = {
-    ...speechResult,
-    summary,
-    speechScore: speechResult.score,
-    score,
-    motion,
-    contentEvaluation,
-  };
-  const id = randomUUID();
-  const createdAt = Date.now();
   try {
-    const [previous] = await db.select({
-      id: analyses.id,
-      createdAt: analyses.createdAt,
-      score: analyses.score,
-      fillerCount: analyses.fillerCount,
-      speakingRate: analyses.speakingRate,
-      motionMetrics: analyses.motionMetrics,
-      feedback: analyses.feedback,
-    }).from(analyses).where(and(
-      eq(analyses.userId, user.id),
-      eq(analyses.practiceType, practiceType),
-    )).orderBy(desc(analyses.createdAt)).limit(1);
-
-    await db.insert(analyses).values({
-      id,
+    const created = await createAnalysis({
       userId: user.id,
       practiceType,
+      practicePrompt,
       transcript,
       durationSeconds,
-      wordCount: result.wordCount,
-      fillerCount: result.fillerCount,
-      fillerDetails: JSON.stringify(result.fillerDetails),
-      speakingRate: result.speakingRate,
-      score: result.score,
-      feedback: JSON.stringify({
-        summary: result.summary,
-        goodPoints: result.goodPoints,
-        improvements: result.improvements,
-        prompt: practicePrompt || null,
-        contentEvaluation,
-      }),
-      motionMetrics: motion ? JSON.stringify(motion) : null,
-      createdAt,
+      motion,
     });
-    const comparison = previous
-      ? buildAnalysisComparison(previous, result, practiceType)
-      : null;
-    return res.status(201).json({ analysis: { id, practiceType, transcript, durationSeconds, createdAt, ...result }, comparison });
+    return res.status(201).json(created);
   } catch (error) {
     console.error("Analysis persistence failed", error);
     return res.status(500).json({ error: "분석 결과를 저장하지 못했습니다. 잠시 후 다시 시도해주세요." });
   }
+});
+
+analysesRouter.post("/text", analyzeRateLimit, async (req, res) => {
+  if (!isSameOriginRequest(req)) return res.status(403).json({ error: "허용되지 않은 요청입니다." });
+  const user = await getCurrentUser(req);
+  if (!user) return res.status(401).json({ error: "로그인이 필요합니다." });
+
+  const body = isRecord(req.body) ? req.body : {};
+  const durationSeconds = Math.round(Number(body.durationSeconds));
+  const practiceTypeValue = typeof body.practiceType === "string" ? body.practiceType : "";
+  const practiceType = isPracticeType(practiceTypeValue) ? practiceTypeValue : "자유 말하기";
+  const practicePrompt = practiceType === "자유 말하기"
+    ? ""
+    : sanitizePracticePrompt(typeof body.prompt === "string" ? body.prompt : "");
+  const transcript = typeof body.transcript === "string" ? body.transcript.trim().slice(0, 20_000) : "";
+  const motion = parseMotionAnalysis(motionQueryFromBody(body.motion));
+
+  if (!Number.isFinite(durationSeconds) || durationSeconds < 3 || durationSeconds > 30 * 60) {
+    return res.status(400).json({ error: "3초 이상 30분 이하의 연습만 분석할 수 있습니다." });
+  }
+  if (transcript.length < 2) {
+    return res.status(422).json({ error: "실시간 받아쓰기에서 분석할 말을 찾지 못했습니다." });
+  }
+
+  try {
+    const created = await createAnalysis({
+      userId: user.id,
+      practiceType,
+      practicePrompt,
+      transcript,
+      durationSeconds,
+      motion,
+    });
+    return res.status(201).json({ ...created, usedLiveTranscript: true });
+  } catch (error) {
+    console.error("Live transcript analysis persistence failed", error);
+    return res.status(500).json({ error: "받아쓰기 분석 결과를 저장하지 못했습니다. 잠시 후 다시 시도해주세요." });
+  }
+});
+
+analysesRouter.get("/recent", async (req, res) => {
+  const user = await getCurrentUser(req);
+  if (!user) return res.status(401).json({ error: "로그인이 필요합니다." });
+  const limitValue = singleQueryValue(req.query.limit);
+  const requestedLimit = limitValue ? Number(limitValue) : Number.NaN;
+  const limit = Number.isInteger(requestedLimit) ? Math.max(1, Math.min(20, requestedLimit)) : 5;
+  const records = await db.select({
+    id: analyses.id,
+    practiceType: analyses.practiceType,
+    transcript: analyses.transcript,
+    durationSeconds: analyses.durationSeconds,
+    wordCount: analyses.wordCount,
+    fillerCount: analyses.fillerCount,
+    fillerDetails: analyses.fillerDetails,
+    speakingRate: analyses.speakingRate,
+    score: analyses.score,
+    feedback: analyses.feedback,
+    motionMetrics: analyses.motionMetrics,
+    createdAt: analyses.createdAt,
+  }).from(analyses)
+    .where(eq(analyses.userId, user.id))
+    .orderBy(desc(analyses.createdAt))
+    .limit(limit);
+
+  return res.json({ analyses: records.map(publicFeedbackAnalysis) });
 });
 
 analysesRouter.get("/summary", async (req, res) => {
@@ -179,6 +197,129 @@ async function loadAnalysisHistory(userId: string) {
     motionMetrics: analyses.motionMetrics,
     createdAt: analyses.createdAt,
   }).from(analyses).where(eq(analyses.userId, userId)).orderBy(desc(analyses.createdAt)).limit(1_000);
+}
+
+async function createAnalysis(input: {
+  userId: string;
+  practiceType: string;
+  practicePrompt: string;
+  transcript: string;
+  durationSeconds: number;
+  motion: MotionAnalysisResult | null;
+}) {
+  const speechResult = analyzeSpeech(input.transcript, input.durationSeconds);
+  let contentEvaluation: ContentEvaluation | null = null;
+  if (input.practicePrompt) {
+    try {
+      contentEvaluation = await evaluateSpeechContent({
+        practiceType: input.practiceType,
+        prompt: input.practicePrompt,
+        transcript: input.transcript,
+      });
+    } catch (error) {
+      console.error("Content relevance evaluation skipped", error instanceof Error ? error.message : error);
+    }
+  }
+
+  const expectsContentEvaluation = Boolean(input.practicePrompt);
+  const score = combinedScore(speechResult.score, input.motion, contentEvaluation, expectsContentEvaluation);
+  const summary = overallSummary(score, contentEvaluation, expectsContentEvaluation);
+  const result = {
+    ...speechResult,
+    summary,
+    speechScore: speechResult.score,
+    score,
+    motion: input.motion,
+    contentEvaluation,
+  };
+  const id = randomUUID();
+  const createdAt = Date.now();
+  const [previous] = await db.select({
+    id: analyses.id,
+    createdAt: analyses.createdAt,
+    score: analyses.score,
+    fillerCount: analyses.fillerCount,
+    speakingRate: analyses.speakingRate,
+    motionMetrics: analyses.motionMetrics,
+    feedback: analyses.feedback,
+  }).from(analyses).where(and(
+    eq(analyses.userId, input.userId),
+    eq(analyses.practiceType, input.practiceType),
+  )).orderBy(desc(analyses.createdAt)).limit(1);
+
+  await db.insert(analyses).values({
+    id,
+    userId: input.userId,
+    practiceType: input.practiceType,
+    transcript: input.transcript,
+    durationSeconds: input.durationSeconds,
+    wordCount: result.wordCount,
+    fillerCount: result.fillerCount,
+    fillerDetails: JSON.stringify(result.fillerDetails),
+    speakingRate: result.speakingRate,
+    score: result.score,
+    feedback: JSON.stringify({
+      summary: result.summary,
+      speechScore: result.speechScore,
+      goodPoints: result.goodPoints,
+      improvements: result.improvements,
+      prompt: input.practicePrompt || null,
+      contentEvaluation,
+    }),
+    motionMetrics: input.motion ? JSON.stringify(input.motion) : null,
+    createdAt,
+  });
+  const comparison = previous
+    ? buildAnalysisComparison(previous, result, input.practiceType)
+    : null;
+  return {
+    analysis: {
+      id,
+      practiceType: input.practiceType,
+      transcript: input.transcript,
+      durationSeconds: input.durationSeconds,
+      createdAt,
+      ...result,
+    },
+    comparison,
+  };
+}
+
+function publicFeedbackAnalysis(record: {
+  id: string;
+  practiceType: string;
+  transcript: string;
+  durationSeconds: number;
+  wordCount: number;
+  fillerCount: number;
+  fillerDetails: string;
+  speakingRate: number;
+  score: number;
+  feedback: string;
+  motionMetrics: string | null;
+  createdAt: number;
+}) {
+  const stored = parseStoredFeedback(record.feedback);
+  const recalculatedSpeech = analyzeSpeech(record.transcript, record.durationSeconds);
+  return {
+    id: record.id,
+    practiceType: record.practiceType,
+    transcript: record.transcript,
+    durationSeconds: record.durationSeconds,
+    wordCount: record.wordCount,
+    fillerCount: record.fillerCount,
+    fillerDetails: parseStoredFillerDetails(record.fillerDetails),
+    speakingRate: record.speakingRate,
+    score: record.score,
+    summary: stored.summary || recalculatedSpeech.summary,
+    speechScore: stored.speechScore ?? recalculatedSpeech.score,
+    goodPoints: stored.goodPoints.length > 0 ? stored.goodPoints : recalculatedSpeech.goodPoints,
+    improvements: stored.improvements.length > 0 ? stored.improvements : recalculatedSpeech.improvements,
+    scenarioPrompt: stored.prompt,
+    contentEvaluation: stored.contentEvaluation,
+    motion: parseStoredMotionAnalysis(record.motionMetrics),
+    createdAt: record.createdAt,
+  };
 }
 
 function singleQueryValue(value: unknown): string {
@@ -311,14 +452,37 @@ function combinedScore(
   speechScore: number,
   motion: MotionAnalysisResult | null,
   content: ContentEvaluation | null,
+  expectsContentEvaluation = false,
 ): number {
-  if (content && motion) return Math.round(speechScore * 0.4 + content.score * 0.35 + motion.score * 0.25);
-  if (content) return Math.round(speechScore * 0.55 + content.score * 0.45);
+  if (content && motion) {
+    const weighted = Math.round(speechScore * 0.3 + content.score * 0.45 + motion.score * 0.25);
+    return applyContentScoreCeiling(weighted, content);
+  }
+  if (content) {
+    const weighted = Math.round(speechScore * 0.45 + content.score * 0.55);
+    return applyContentScoreCeiling(weighted, content);
+  }
+  if (expectsContentEvaluation) {
+    const deliveryScore = motion ? Math.round(speechScore * 0.7 + motion.score * 0.3) : speechScore;
+    return Math.min(70, deliveryScore);
+  }
   if (motion) return Math.round(speechScore * 0.7 + motion.score * 0.3);
   return speechScore;
 }
 
-function overallSummary(score: number, content: ContentEvaluation | null): string {
+function applyContentScoreCeiling(score: number, content: ContentEvaluation): number {
+  if (content.dimensions?.questionRelevance !== undefined && content.dimensions.questionRelevance < 30) {
+    return Math.min(score, 49);
+  }
+  if (content.dimensions?.logicalCoherence !== undefined && content.dimensions.logicalCoherence < 30) {
+    return Math.min(score, 54);
+  }
+  if (content.score < 50) return Math.min(score, 64);
+  return score;
+}
+
+function overallSummary(score: number, content: ContentEvaluation | null, expectsContentEvaluation = false): string {
+  if (expectsContentEvaluation && !content) return "전달 방식은 분석했지만 AI 내용 평가는 일시적으로 제외됐어요. 잠시 후 다시 연습하면 주제 적합성과 개연성도 함께 확인할 수 있어요.";
   if (content && content.score < 50) return "말하기 습관과 함께 질문에 직접 답하는 구성을 보완해보세요.";
   if (score >= 85) return content
     ? "내용과 전달 방식이 모두 안정적이었어요. 지금의 흐름을 유지해보세요."
@@ -328,19 +492,108 @@ function overallSummary(score: number, content: ContentEvaluation | null): strin
 }
 
 function parseStoredContentEvaluation(value: string): ContentEvaluation | null {
+  return parseStoredFeedback(value).contentEvaluation;
+}
+
+function parseStoredFeedback(value: string): {
+  summary: string;
+  speechScore: number | null;
+  goodPoints: string[];
+  improvements: string[];
+  prompt: string | null;
+  contentEvaluation: ContentEvaluation | null;
+} {
   try {
-    const parsed = JSON.parse(value) as { contentEvaluation?: unknown };
-    const content = parsed.contentEvaluation;
-    if (!content || typeof content !== "object" || Array.isArray(content)) return null;
-    const score = Number((content as { score?: unknown }).score);
-    if (!Number.isFinite(score)) return null;
+    const parsed = JSON.parse(value) as unknown;
+    if (!isRecord(parsed)) throw new Error("Invalid stored feedback");
     return {
-      score: Math.max(0, Math.min(100, Math.round(score))),
-      summary: "",
-      goodPoints: [],
-      improvements: [],
+      summary: cleanStoredText(parsed.summary, 300),
+      speechScore: nullableScore(parsed.speechScore),
+      goodPoints: storedStringList(parsed.goodPoints, 4),
+      improvements: storedStringList(parsed.improvements, 4),
+      prompt: cleanStoredText(parsed.prompt, 400) || null,
+      contentEvaluation: parseStoredContentObject(parsed.contentEvaluation),
     };
   } catch {
-    return null;
+    return {
+      summary: "",
+      speechScore: null,
+      goodPoints: [],
+      improvements: [],
+      prompt: null,
+      contentEvaluation: null,
+    };
   }
+}
+
+function parseStoredContentObject(value: unknown): ContentEvaluation | null {
+  if (!isRecord(value)) return null;
+  const score = nullableScore(value.score);
+  if (score === null) return null;
+  const rawDimensions = isRecord(value.dimensions) ? value.dimensions : null;
+  const dimensions = rawDimensions ? {
+    questionRelevance: nullableScore(rawDimensions.questionRelevance) ?? score,
+    logicalCoherence: nullableScore(rawDimensions.logicalCoherence) ?? score,
+    situationalFit: nullableScore(rawDimensions.situationalFit) ?? score,
+    specificity: nullableScore(rawDimensions.specificity) ?? score,
+  } : undefined;
+  return {
+    score,
+    summary: cleanStoredText(value.summary, 300),
+    goodPoints: storedStringList(value.goodPoints, 3),
+    improvements: storedStringList(value.improvements, 4),
+    dimensions,
+  };
+}
+
+function parseStoredFillerDetails(value: string): Record<string, number> {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!isRecord(parsed)) return {};
+    return Object.fromEntries(Object.entries(parsed).flatMap(([key, count]) => {
+      return typeof count === "number" && Number.isFinite(count) && count > 0
+        ? [[key, Math.round(count)]]
+        : [];
+    }));
+  } catch {
+    return {};
+  }
+}
+
+function motionQueryFromBody(value: unknown): Record<string, string | undefined> {
+  if (!isRecord(value)) return {};
+  const asString = (key: string) => typeof value[key] === "number" ? String(value[key]) : undefined;
+  return {
+    motionSampleCount: asString("sampleCount"),
+    facePresenceRate: asString("facePresenceRate"),
+    eyeContactRate: asString("eyeContactRate"),
+    postureRate: asString("postureRate"),
+    stabilityScore: asString("stabilityScore"),
+    smileRate: asString("smileRate"),
+    tenseExpressionRate: asString("tenseExpressionRate"),
+    expressionVariationScore: asString("expressionVariationScore"),
+    shoulderTiltEvents: asString("shoulderTiltEvents"),
+    headTurnEvents: asString("headTurnEvents"),
+  };
+}
+
+function nullableScore(value: unknown): number | null {
+  const score = Number(value);
+  return Number.isFinite(score) ? Math.max(0, Math.min(100, Math.round(score))) : null;
+}
+
+function storedStringList(value: unknown, limit: number): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const text = cleanStoredText(item, 240);
+    return text ? [text] : [];
+  }).slice(0, limit);
+}
+
+function cleanStoredText(value: unknown, limit: number): string {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, limit) : "";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

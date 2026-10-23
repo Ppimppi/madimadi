@@ -19,7 +19,7 @@ const links: Array<{ id: WorkspacePage; href: string; label: string; icon: typeo
 export function DashboardSidebar({ active }: DashboardSidebarProps) {
   return (
     <aside className="mm-sidebar">
-      <AuthLogo />
+      <AuthLogo href="/dashboard" />
       <nav className="mm-nav" aria-label="마디마디 메뉴">
         {links.map((item) => {
           const Icon = item.icon;

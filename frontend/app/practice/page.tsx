@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { WorkspaceError, WorkspaceLayout, WorkspaceLoading } from "@/components/dashboard/workspace-layout";
 import { PracticeRecorder, type RecorderStatus } from "@/components/practice/practice-recorder";
+import { RecentFeedback } from "@/components/practice/recent-feedback";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCurrentUser } from "@/hooks/use-current-user";
@@ -75,6 +76,7 @@ export default function PracticePage() {
   const [questionError, setQuestionError] = useState("");
   const [questionVersion, setQuestionVersion] = useState(0);
   const [recorderStatus, setRecorderStatus] = useState<RecorderStatus>("idle");
+  const [historyVersion, setHistoryVersion] = useState(0);
   const recentQuestionsRef = useRef<Partial<Record<ScenarioMode, string[]>>>({});
   const recentCategoriesRef = useRef<Partial<Record<ScenarioMode, string[]>>>({});
   const requestNumberRef = useRef(0);
@@ -193,6 +195,7 @@ export default function PracticePage() {
         lockedType
         disabled={questionLoading}
         onStatusChange={setRecorderStatus}
+        onAnalysisSaved={() => setHistoryVersion((current) => current + 1)}
         variant="scenario"
         scenarioPrompt={mode === "자유 말하기" ? undefined : activeQuestion.question}
         intro={(
@@ -222,6 +225,7 @@ export default function PracticePage() {
           </div>
         )}
       />
+      <RecentFeedback refreshKey={historyVersion} />
     </WorkspaceLayout>
   );
 }

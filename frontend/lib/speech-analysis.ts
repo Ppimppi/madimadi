@@ -18,6 +18,12 @@ export type SpeechAnalysisResult = {
     summary: string;
     goodPoints: string[];
     improvements: string[];
+    dimensions?: {
+      questionRelevance: number;
+      logicalCoherence: number;
+      situationalFit: number;
+      specificity: number;
+    };
   } | null;
 };
 

@@ -27,7 +27,7 @@ import { PRACTICE_TYPES, type PracticeType, type SpeechAnalysisResult } from "@/
 
 export type RecorderStatus = "idle" | "recording" | "recorded" | "analyzing" | "complete";
 
-type SavedAnalysis = SpeechAnalysisResult & {
+export type SavedAnalysis = SpeechAnalysisResult & {
   id: string;
   practiceType: PracticeType;
   transcript: string;
@@ -71,6 +71,7 @@ type RecognitionLike = {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
+  maxAlternatives: number;
   onresult: ((event: RecognitionEventLike) => void) | null;
   onerror: ((event: RecognitionErrorEventLike) => void) | null;
   onend: (() => void) | null;
@@ -95,6 +96,7 @@ type PracticeRecorderProps = {
   onStatusChange?: (status: RecorderStatus) => void;
   scenarioPrompt?: string;
   variant?: "default" | "scenario";
+  onAnalysisSaved?: (analysis: SavedAnalysis) => void;
 };
 
 const waveformBars = [
@@ -112,6 +114,7 @@ export function PracticeRecorder({
   onStatusChange,
   scenarioPrompt,
   variant = "default",
+  onAnalysisSaved,
 }: PracticeRecorderProps = {}) {
   const [status, setStatus] = useState<RecorderStatus>("idle");
   const [practiceType, setPracticeType] = useState<PracticeType>(initialPracticeType);
@@ -140,6 +143,7 @@ export function PracticeRecorder({
   const videoChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recognitionRestartRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recognitionRestartDelayRef = useRef(250);
   const startedAtRef = useRef(0);
   const finalTranscriptRef = useRef("");
   const shouldRecognizeRef = useRef(false);
@@ -286,6 +290,7 @@ export function PracticeRecorder({
     setTranscript("");
     setAudioBlob(null);
     finalTranscriptRef.current = "";
+    recognitionRestartDelayRef.current = 250;
     chunksRef.current = [];
     videoChunksRef.current = [];
     motionResultRef.current = null;
@@ -386,15 +391,17 @@ export function PracticeRecorder({
         recognition.continuous = true;
         recognition.interimResults = true;
         recognition.lang = "ko-KR";
+        recognition.maxAlternatives = 1;
         recognition.onresult = (event) => {
           let finalText = finalTranscriptRef.current;
           let interimText = "";
           for (let index = event.resultIndex; index < event.results.length; index += 1) {
             const item = event.results[index];
-            const text = item[0].transcript.trim();
-            if (item.isFinal) finalText = `${finalText} ${text}`.trim();
+            const text = normalizeRecognitionText(item[0].transcript);
+            if (item.isFinal) finalText = mergeRecognitionText(finalText, text);
             else interimText = `${interimText} ${text}`.trim();
           }
+          recognitionRestartDelayRef.current = 250;
           finalTranscriptRef.current = finalText;
           setTranscript(`${finalText} ${interimText}`.trim());
         };
@@ -404,8 +411,18 @@ export function PracticeRecorder({
             setNotice("브라우저에서 실시간 받아쓰기가 차단되었습니다. 주소창의 마이크 권한을 허용해주세요.");
             return;
           }
+          if (event.error === "audio-capture") {
+            shouldRecognizeRef.current = false;
+            setNotice("실시간 받아쓰기가 마이크 소리를 받지 못했습니다. 녹음 파일은 계속 저장됩니다.");
+            return;
+          }
+          if (event.error === "network") {
+            recognitionRestartDelayRef.current = Math.min(recognitionRestartDelayRef.current * 2, 2_000);
+            setNotice("실시간 자막 연결이 잠시 끊겼습니다. 자동으로 다시 연결하고 있어요.");
+            return;
+          }
           if (event.error !== "aborted" && event.error !== "no-speech") {
-            setNotice(`실시간 받아쓰기가 중단되었습니다(${event.error}). 녹음 후 직접 수정할 수 있어요.`);
+            setNotice("실시간 받아쓰기가 잠시 중단됐습니다. 녹음 후 AI 전사로 다시 확인합니다.");
           }
         };
         recognition.onend = () => {
@@ -418,7 +435,7 @@ export function PracticeRecorder({
               } catch {
                 setNotice("실시간 받아쓰기를 다시 시작하지 못했습니다. 녹음 후 직접 수정할 수 있어요.");
               }
-            }, 250);
+            }, recognitionRestartDelayRef.current);
           }
         };
         recognitionRef.current = recognition;
@@ -475,6 +492,7 @@ export function PracticeRecorder({
     setCameraActive(false);
     changeStatus("idle");
     finalTranscriptRef.current = "";
+    recognitionRestartDelayRef.current = 250;
   }
 
   async function saveAndAnalyze() {
@@ -508,17 +526,41 @@ export function PracticeRecorder({
         query.set("shoulderTiltEvents", String(motion.shoulderTiltEvents));
         query.set("headTurnEvents", String(motion.headTurnEvents));
       }
-      const response = await fetch(`/api/analyses?${query.toString()}`, {
+      let response = await fetch(`/api/analyses?${query.toString()}`, {
         method: "POST",
         headers: { "Content-Type": audioBlob.type || "audio/webm" },
         body: audioBlob,
       });
-      const data = (await response.json()) as { analysis?: SavedAnalysis; comparison?: AnalysisComparison | null; error?: string };
+      let data = (await response.json()) as {
+        analysis?: SavedAnalysis;
+        comparison?: AnalysisComparison | null;
+        error?: string;
+        usedLiveTranscript?: boolean;
+      };
+      const liveTranscript = transcript.trim();
+      if (!response.ok && (response.status === 502 || response.status === 503) && liveTranscript.length >= 2) {
+        response = await fetch("/api/analyses/text", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            durationSeconds: seconds,
+            practiceType,
+            prompt: scenarioPrompt?.trim() || undefined,
+            transcript: liveTranscript,
+            motion: motionResultRef.current,
+          }),
+        });
+        data = (await response.json()) as typeof data;
+      }
       if (!response.ok || !data.analysis) throw new Error(data.error || "분석에 실패했습니다.");
       setTranscript(data.analysis.transcript);
       finalTranscriptRef.current = data.analysis.transcript;
       setResult(data.analysis);
       setComparison(data.comparison ?? null);
+      if (data.usedLiveTranscript) {
+        setNotice("AI 음성 서버가 혼잡해 실시간 받아쓰기를 바탕으로 분석했습니다. 전사문을 함께 확인해주세요.");
+      }
+      onAnalysisSaved?.(data.analysis);
       changeStatus("complete");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "분석 중 문제가 발생했습니다.");
@@ -665,11 +707,11 @@ export function PracticeRecorder({
           </div>
           <div className="result-feedback-grid">
             <article>
-              <h3><CheckCircle2 />잘한 점</h3>
+              <h3><CheckCircle2 />음성 습관에서 잘한 점</h3>
               <ul>{result.goodPoints.map((point) => <li key={point}>{point}</li>)}</ul>
             </article>
             <article>
-              <h3><Sparkles />다음 연습</h3>
+              <h3><Sparkles />음성 습관 교정 제안</h3>
               <ul>{result.improvements.map((point) => <li key={point}>{point}</li>)}</ul>
             </article>
           </div>
@@ -680,6 +722,14 @@ export function PracticeRecorder({
                 <div><span>질문 적합성 분석</span><strong>{result.contentEvaluation.summary}</strong></div>
                 <b>{result.contentEvaluation.score}<small>점</small></b>
               </div>
+              {result.contentEvaluation.dimensions && (
+                <div className="content-dimension-grid">
+                  <article><span>질문 관련성</span><strong>{result.contentEvaluation.dimensions.questionRelevance}<small>점</small></strong></article>
+                  <article><span>전개 개연성</span><strong>{result.contentEvaluation.dimensions.logicalCoherence}<small>점</small></strong></article>
+                  <article><span>상황 적합성</span><strong>{result.contentEvaluation.dimensions.situationalFit}<small>점</small></strong></article>
+                  <article><span>근거 구체성</span><strong>{result.contentEvaluation.dimensions.specificity}<small>점</small></strong></article>
+                </div>
+              )}
               <div className="content-feedback-grid">
                 <article><h3><CheckCircle2 />내용에서 잘한 점</h3><ul>{result.contentEvaluation.goodPoints.map((point) => <li key={point}>{point}</li>)}</ul></article>
                 <article><h3><Sparkles />내용 구성 제안</h3><ul>{result.contentEvaluation.improvements.map((point) => <li key={point}>{point}</li>)}</ul></article>
@@ -717,7 +767,11 @@ export function PracticeRecorder({
                   {comparison.metrics.map((metric) => (
                     <article key={metric.key} className={metric.improved === true ? "is-improved" : metric.improved === false ? "is-declined" : "is-same"}>
                       <span>{metric.label}</span>
-                      <div><b>{metric.before}{metric.unit}</b><ArrowRight /><strong>{metric.after}{metric.unit}</strong></div>
+                      <div className="comparison-values">
+                        <b><span>{metric.before}</span><small>{metric.unit}</small></b>
+                        <ArrowRight />
+                        <strong><span>{metric.after}</span><small>{metric.unit}</small></strong>
+                      </div>
                       <small>{comparisonChangeLabel(metric)}</small>
                     </article>
                   ))}
@@ -751,6 +805,33 @@ function preferredAudioConstraints(): MediaTrackConstraints {
     noiseSuppression: true,
     autoGainControl: true,
   };
+}
+
+function normalizeRecognitionText(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function mergeRecognitionText(current: string, incoming: string): string {
+  const base = normalizeRecognitionText(current);
+  const chunk = normalizeRecognitionText(incoming);
+  if (!chunk) return base;
+  if (!base) return chunk;
+
+  const comparable = (value: string) => value.replace(/[^0-9A-Za-z가-힣]/g, "").toLowerCase();
+  const comparableChunk = comparable(chunk);
+  if (comparableChunk.length >= 4 && comparable(base).endsWith(comparableChunk)) return base;
+
+  const baseWords = base.split(" ");
+  const chunkWords = chunk.split(" ");
+  const maximumOverlap = Math.min(8, baseWords.length, chunkWords.length);
+  for (let size = maximumOverlap; size >= 2; size -= 1) {
+    const baseTail = comparable(baseWords.slice(-size).join(" "));
+    const chunkHead = comparable(chunkWords.slice(0, size).join(" "));
+    if (baseTail && baseTail === chunkHead) {
+      return `${base} ${chunkWords.slice(size).join(" ")}`.trim();
+    }
+  }
+  return `${base} ${chunk}`;
 }
 
 function expressionInsight(motion: MotionAnalysisResult): string {

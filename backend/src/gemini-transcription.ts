@@ -20,6 +20,7 @@ export class GeminiTranscriptionError extends Error {
 export async function transcribeKoreanSpeech(input: {
   audio: Buffer;
   mimeType: string;
+  context?: string;
 }): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) {
@@ -39,7 +40,10 @@ export async function transcribeKoreanSpeech(input: {
         generation_config: {
           transcription_config: {
             language_codes: ["ko-KR"],
-            custom_vocabulary: FILLER_VOCABULARY,
+            custom_vocabulary: [...new Set([
+              ...FILLER_VOCABULARY,
+              ...contextVocabulary(input.context),
+            ])].slice(0, 80),
             mode: "verbatim",
           },
         },
@@ -75,5 +79,17 @@ function normalizeMimeType(value: string): string {
 function removeWrappingCodeFence(value: string): string {
   const match = value.match(/^```(?:text)?\s*([\s\S]*?)\s*```$/i);
   return (match?.[1] ?? value).trim();
+}
+
+function contextVocabulary(value: string | undefined): string[] {
+  if (!value) return [];
+  const stopWords = new Set([
+    "그리고", "하지만", "어떻게", "해주세요", "말씀해주세요", "대해서", "위해서",
+    "있다면", "하는", "있는", "대한", "주제로", "상황에서",
+  ]);
+  return (value.match(/[0-9A-Za-z가-힣][0-9A-Za-z가-힣+.#-]{1,29}/g) ?? [])
+    .map((word) => word.trim())
+    .filter((word) => !stopWords.has(word))
+    .slice(0, 48);
 }
 
