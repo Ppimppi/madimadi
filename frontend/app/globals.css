@@ -1456,6 +1456,26 @@ a {
   justify-content: flex-end;
 }
 
+.practice-options.is-analysis-header {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) auto minmax(90px, 1fr);
+  align-items: center;
+}
+
+.practice-options.is-analysis-header .practice-analysis-title {
+  grid-column: 2;
+  margin: 0;
+  color: #302b3f;
+  font-size: 19px;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+
+.practice-options.is-analysis-header .recording-state {
+  grid-column: 3;
+  justify-self: end;
+}
+
 .practice-options label {
   display: block;
   margin: 0 0 7px 2px;
@@ -2312,6 +2332,13 @@ div.camera-preview video {
   .practice-options {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .practice-options.is-analysis-header {
+    display: flex;
+    align-items: center;
+    flex-direction: row;
+    justify-content: space-between;
   }
 
   .practice-select {

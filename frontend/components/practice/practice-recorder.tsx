@@ -516,7 +516,10 @@ export function PracticeRecorder({ initialPracticeType = "자유 말하기", loc
     <div className={`practice-workspace ${variant === "scenario" ? "is-scenario" : ""}`}>
       <section className="practice-recorder-card">
         {intro}
-        <div className={`practice-options ${lockedType ? "is-locked" : ""}`}>
+        <div className={`practice-options ${lockedType ? "is-locked" : ""} ${lockedType && variant === "default" ? "is-analysis-header" : ""}`}>
+          {lockedType && variant === "default" && (
+            <h2 className="practice-analysis-title">새로운 분석</h2>
+          )}
           {!lockedType && <div>
             <label htmlFor="practice-type">연습 상황</label>
             <select
