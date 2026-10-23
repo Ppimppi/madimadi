@@ -4,6 +4,7 @@ AI 말하기 코칭 서비스의 GitHub 이전용 모노레포입니다. 기존 
 
 ## 폴더 구조
 
+
 ```text
 madimadi/
 ├── frontend/  # Next.js (Vercel용)
