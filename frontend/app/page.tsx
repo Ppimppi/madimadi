@@ -63,19 +63,19 @@ const practiceSteps = [
 
 const stories = [
   {
-    tag: "발표 연습",
-    quote: "막연히 긴장된다고만 생각했는데, 반복하는 표현과 말하기 속도를 같이 보니 고칠 지점이 선명해졌어요.",
-    name: "발표를 준비하는 사용자",
+    tag: "말하기 분석",
+    quote: "말할 때 버벅거리는 순간들이 많은데 마디마디는 그런 말투를 개선하는 걸 도와주는 것 같아요.",
+    name: "마디마디 사용자",
   },
   {
-    tag: "면접 준비",
-    quote: "질문에 답하고 바로 피드백을 받으니 혼자 연습할 때보다 다음 답변에서 무엇을 바꿀지 알기 쉬웠어요.",
-    name: "면접을 준비하는 사용자",
+    tag: "성장 리포트",
+    quote: "주간 리포트로 변화를 확인하면서 무의식적으로 쓰던 추임새를 알게 되었어요.",
+    name: "마디마디 사용자",
   },
   {
-    tag: "일상 대화",
-    quote: "주간 리포트로 변화를 확인하면서 무의식적으로 쓰던 추임새를 조금씩 줄이는 데 집중할 수 있었어요.",
-    name: "말하기 습관을 고치는 사용자",
+    tag: "상황별 연습",
+    quote: "주제가 다양해서 어떤 상황에서도 잘 말할 수 있을 거란 자신감이 붙었어요.",
+    name: "마디마디 사용자",
   },
 ];
 
@@ -271,8 +271,8 @@ export default function Home() {
       <section id="stories" className="story-section" aria-labelledby="story-title">
         <div className="section-heading">
           <span>USER STORIES</span>
-          <h2 id="story-title">말하기를 연습하는 순간들</h2>
-          <p>마디마디로 연습할 때 기대할 수 있는 변화를 소개합니다.</p>
+          <h2 id="story-title">마디마디 사용자 후기</h2>
+          <p>마디마디를 직접 사용해 본 사용자들의 의견입니다.</p>
         </div>
         <div className="story-grid">
           {stories.map(({ tag, quote, name }) => (
