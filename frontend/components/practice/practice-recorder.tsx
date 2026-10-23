@@ -15,6 +15,7 @@ import {
   Smile,
   Sparkles,
   Square,
+  Target,
   Volume2,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
@@ -90,6 +91,7 @@ type PracticeRecorderProps = {
   initialPracticeType?: PracticeType;
   lockedType?: boolean;
   intro?: ReactNode;
+  scenarioPrompt?: string;
   variant?: "default" | "scenario";
 };
 
@@ -100,7 +102,13 @@ const waveformBars = [
   37, 26, 19, 15, 23, 34, 28, 20, 15, 11,
 ];
 
-export function PracticeRecorder({ initialPracticeType = "자유 말하기", lockedType = false, intro, variant = "default" }: PracticeRecorderProps = {}) {
+export function PracticeRecorder({
+  initialPracticeType = "자유 말하기",
+  lockedType = false,
+  intro,
+  scenarioPrompt,
+  variant = "default",
+}: PracticeRecorderProps = {}) {
   const [status, setStatus] = useState<RecorderStatus>("idle");
   const [practiceType, setPracticeType] = useState<PracticeType>(initialPracticeType);
   const [seconds, setSeconds] = useState(0);
@@ -297,15 +305,15 @@ export function PracticeRecorder({ initialPracticeType = "자유 말하기", loc
       if (cameraEnabled) {
         try {
           stream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
+            audio: preferredAudioConstraints(),
             video: { facingMode: "user", width: { ideal: 960 }, height: { ideal: 540 } },
           });
         } catch {
-          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          stream = await navigator.mediaDevices.getUserMedia({ audio: preferredAudioConstraints() });
           setNotice("카메라를 사용할 수 없어 이번 연습은 음성만 분석합니다.");
         }
       } else {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream = await navigator.mediaDevices.getUserMedia({ audio: preferredAudioConstraints() });
       }
       streamRef.current = stream;
       const hasCamera = stream.getVideoTracks().length > 0;
@@ -325,7 +333,7 @@ export function PracticeRecorder({ initialPracticeType = "자유 말하기", loc
       const audioStream = new MediaStream(stream.getAudioTracks());
       let recorder: MediaRecorder;
       try {
-        recorder = new MediaRecorder(audioStream, { audioBitsPerSecond: 48_000 });
+        recorder = new MediaRecorder(audioStream, { audioBitsPerSecond: 64_000 });
       } catch {
         recorder = new MediaRecorder(audioStream);
       }
@@ -481,6 +489,7 @@ export function PracticeRecorder({ initialPracticeType = "자유 말하기", loc
         durationSeconds: String(seconds),
         practiceType,
       });
+      if (scenarioPrompt?.trim()) query.set("prompt", scenarioPrompt.trim());
       const motion = motionResultRef.current;
       if (motion) {
         query.set("motionSampleCount", String(motion.sampleCount));
@@ -631,12 +640,19 @@ export function PracticeRecorder({ initialPracticeType = "자유 말하기", loc
             <span>종합 점수</span>
             <strong>{result.score}<small>점</small></strong>
             <p>{result.summary}</p>
-            {result.motion && <small className="score-breakdown">음성 {result.speechScore}점 · 영상 {result.motion.score}점</small>}
+            {(result.contentEvaluation || result.motion) && (
+              <small className="score-breakdown">
+                말하기 습관 {result.speechScore}점
+                {result.contentEvaluation && ` · 내용 ${result.contentEvaluation.score}점`}
+                {result.motion && ` · 영상 ${result.motion.score}점`}
+              </small>
+            )}
           </div>
           <div className="result-metrics">
             <article><Gauge /><span>말하기 속도</span><strong>{result.speakingRate}<small> 어절/분</small></strong></article>
             <article><MessageCircleWarning /><span>추임새</span><strong>{result.fillerCount}<small> 회</small></strong></article>
             <article><Volume2 /><span>말한 분량</span><strong>{result.wordCount}<small> 어절</small></strong></article>
+            {result.contentEvaluation && <article><Target /><span>내용 적합성</span><strong>{result.contentEvaluation.score}<small> 점</small></strong></article>}
           </div>
           <div className="result-feedback-grid">
             <article>
@@ -648,6 +664,19 @@ export function PracticeRecorder({ initialPracticeType = "자유 말하기", loc
               <ul>{result.improvements.map((point) => <li key={point}>{point}</li>)}</ul>
             </article>
           </div>
+          {result.contentEvaluation && (
+            <div className="content-result-panel">
+              <div className="content-result-heading">
+                <Target />
+                <div><span>질문 적합성 분석</span><strong>{result.contentEvaluation.summary}</strong></div>
+                <b>{result.contentEvaluation.score}<small>점</small></b>
+              </div>
+              <div className="content-feedback-grid">
+                <article><h3><CheckCircle2 />내용에서 잘한 점</h3><ul>{result.contentEvaluation.goodPoints.map((point) => <li key={point}>{point}</li>)}</ul></article>
+                <article><h3><Sparkles />내용 구성 제안</h3><ul>{result.contentEvaluation.improvements.map((point) => <li key={point}>{point}</li>)}</ul></article>
+              </div>
+            </div>
+          )}
           {result.motion && (
             <div className="motion-result-panel">
               <div className="motion-result-heading"><Camera /><div><span>영상·표정 분석</span><strong>카메라 응시, 상체 자세와 표정 변화를 함께 확인했어요.</strong></div></div>
@@ -704,6 +733,15 @@ function supportedVideoMimeType(): string | undefined {
     "video/mp4",
   ];
   return candidates.find((type) => MediaRecorder.isTypeSupported(type));
+}
+
+function preferredAudioConstraints(): MediaTrackConstraints {
+  return {
+    channelCount: 1,
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+  };
 }
 
 function expressionInsight(motion: MotionAnalysisResult): string {

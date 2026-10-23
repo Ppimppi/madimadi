@@ -53,7 +53,7 @@ export default function DashboardPage() {
             <span><Sparkles /> 주간 연습</span>
             <h2>{firstGoal}에 도전해보세요!</h2>
             <p>60초 동안 핵심부터 말하고, AI 분석으로 바로 확인해보세요.</p>
-            <Button asChild><a href="/situational-practice">연습 시작하기 <ArrowRight /></a></Button>
+            <Button asChild><a href="/practice">연습 시작하기 <ArrowRight /></a></Button>
           </div>
           <div className="mm-sound-figure" aria-hidden="true">
             <div className="mm-sound-bars is-left">{[28, 52, 74].map((height, index) => <i key={index} style={{ height }} />)}</div>

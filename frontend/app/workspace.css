@@ -358,7 +358,7 @@
   height: auto !important;
   padding: 5px;
   display: grid !important;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   border: 1px solid var(--mm-line);
   border-radius: 12px;
   background: #fff !important;

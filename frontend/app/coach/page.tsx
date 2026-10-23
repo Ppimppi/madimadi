@@ -114,7 +114,7 @@ export default function CoachPage() {
           <span><Sparkles /> 개인 맞춤 훈련</span>
           <h2>지금 필요한 연습</h2>
           <div>{training.map((item) => { const Icon = item.icon; return <article key={item.title}><Icon /><div><strong>{item.title}</strong><small>{item.copy}</small></div></article>; })}</div>
-          <Button asChild><a href="/situational-practice">훈련 시작하기</a></Button>
+          <Button asChild><a href="/practice">훈련 시작하기</a></Button>
         </aside>
       </section>
     </WorkspaceLayout>

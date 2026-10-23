@@ -1,18 +1,21 @@
 import { GoogleGenAI } from "@google/genai";
 
+import { isRetryableGeminiError, safeErrorMessage, withGeminiRetry } from "./gemini-retry.js";
+
 const DEFAULT_TRANSCRIPTION_MODEL = "gemini-3.5-transcribe";
 const TRANSCRIPTION_TIMEOUT_MS = 90_000;
 
-const TRANSCRIPTION_PROMPT = [
-  "한국어 말하기 연습 녹음을 발화 그대로 전사하세요.",
-  "교정, 요약, 설명, 화자 이름, 제목은 추가하지 말고 전사문만 출력하세요.",
-  "특히 어, 음, 엄, 저, 저기, 그, 그러니까, 그니까, 약간, 뭔가, 이제, 있잖아요 같은 머뭇거림과 추임새를 생략하지 마세요.",
-  "같은 단어를 반복하거나 문장을 다시 시작한 부분도 실제 발화대로 남기세요.",
-  "들리지 않는 표현은 추측해서 만들지 마세요.",
-].join(" ");
+const FILLER_VOCABULARY = [
+  "어", "어어", "음", "으음", "엄", "아", "저기", "그러니까", "그니까",
+  "뭐랄까", "있잖아", "있잖아요", "약간", "뭔가", "이제", "마디마디",
+];
 
 export class GeminiConfigurationError extends Error {}
-export class GeminiTranscriptionError extends Error {}
+export class GeminiTranscriptionError extends Error {
+  constructor(message: string, readonly retryable = false) {
+    super(message);
+  }
+}
 
 export async function transcribeKoreanSpeech(input: {
   audio: Buffer;
@@ -25,21 +28,25 @@ export async function transcribeKoreanSpeech(input: {
 
   const client = new GoogleGenAI({ apiKey });
   try {
-    const interaction = await client.interactions.create(
+    const interaction = await withGeminiRetry("Gemini transcription", () => client.interactions.create(
       {
         model: process.env.GEMINI_TRANSCRIPTION_MODEL?.trim() || DEFAULT_TRANSCRIPTION_MODEL,
-        input: [
-          { type: "text", text: TRANSCRIPTION_PROMPT },
-          {
-            type: "audio",
-            data: input.audio.toString("base64"),
-            mime_type: normalizeMimeType(input.mimeType),
+        input: [{
+          type: "audio",
+          data: input.audio.toString("base64"),
+          mime_type: normalizeMimeType(input.mimeType),
+        }],
+        generation_config: {
+          transcription_config: {
+            language_codes: ["ko-KR"],
+            custom_vocabulary: FILLER_VOCABULARY,
+            mode: "verbatim",
           },
-        ],
+        },
         store: false,
       },
       { timeout: TRANSCRIPTION_TIMEOUT_MS },
-    );
+    ));
 
     const transcript = interaction.output_text?.trim();
     if (!transcript) {
@@ -51,8 +58,9 @@ export async function transcribeKoreanSpeech(input: {
     if (error instanceof GeminiConfigurationError || error instanceof GeminiTranscriptionError) {
       throw error;
     }
+    const retryable = isRetryableGeminiError(error);
     console.error("Gemini transcription request failed", safeErrorMessage(error));
-    throw new GeminiTranscriptionError("Gemini transcription request failed");
+    throw new GeminiTranscriptionError("Gemini transcription request failed", retryable);
   }
 }
 
@@ -69,7 +77,3 @@ function removeWrappingCodeFence(value: string): string {
   return (match?.[1] ?? value).trim();
 }
 
-function safeErrorMessage(error: unknown): string {
-  if (!(error instanceof Error)) return "Unknown Gemini error";
-  return `${error.name}: ${error.message}`.slice(0, 500);
-}

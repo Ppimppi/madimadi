@@ -2237,7 +2237,7 @@ div.camera-preview video {
 
 .result-metrics {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
   gap: 12px;
 }
 
@@ -2309,6 +2309,49 @@ div.camera-preview video {
   font-size: 14px;
   line-height: 1.65;
 }
+
+.content-result-panel {
+  grid-column: 1 / -1;
+  padding: 21px;
+  border: 1px solid #e2dcf8;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f9f7ff, #fff);
+}
+
+.content-result-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+}
+
+.content-result-heading > svg {
+  width: 39px;
+  height: 39px;
+  padding: 9px;
+  border-radius: 11px;
+  background: #eae5ff;
+  color: var(--purple);
+}
+
+.content-result-heading > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.content-result-heading span { color: var(--purple); font-size: 11px; font-weight: 850; }
+.content-result-heading strong { color: #403a4c; font-size: 15px; line-height: 1.5; }
+.content-result-heading > b { color: var(--purple-deep); font-size: 28px; white-space: nowrap; }
+.content-result-heading > b small { margin-left: 2px; font-size: 11px; }
+
+.content-feedback-grid {
+  margin-top: 13px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+
+.content-feedback-grid article { padding: 15px; border: 1px solid #ebe7f6; border-radius: 12px; background: #fff; }
+.content-feedback-grid h3 { margin: 0; display: flex; align-items: center; gap: 6px; color: #4d4658; font-size: 13px; }
+.content-feedback-grid h3 svg { width: 16px; height: 16px; color: var(--purple); }
+.content-feedback-grid ul { margin: 9px 0 0; padding-left: 17px; color: #716a7d; font-size: 12px; line-height: 1.6; }
 
 .motion-result-panel {
   grid-column: 1 / -1;
@@ -2680,9 +2723,13 @@ div.camera-preview video {
 
   .result-metrics,
   .result-feedback-grid,
+  .content-feedback-grid,
   .motion-feedback-grid {
     grid-template-columns: 1fr;
   }
+
+  .content-result-heading { grid-template-columns: auto minmax(0, 1fr); }
+  .content-result-heading > b { grid-column: 2; font-size: 22px; }
 
   .motion-metrics { grid-template-columns: 1fr 1fr; }
 
